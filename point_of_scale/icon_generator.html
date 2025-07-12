@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>TE Icon Generator</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      flex-direction: column;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      border: 1px solid #ccc;
+    }
+    button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background-color: #6B8E7F;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>TEPOS Icon Generator</h1>
+  <canvas id="iconCanvas" width="1024" height="1024"></canvas>
+  <p>Right-click on the image and select "Save image as..." to download</p>
+  <button onclick="generateIcon()">Generate Icon</button>
+
+  <script>
+    function generateIcon() {
+      const canvas = document.getElementById('iconCanvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Background color
+      ctx.fillStyle = '#6B8E7F';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Text "TE"
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 480px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('TE', canvas.width/2, canvas.height/2);
+    }
+    
+    // Generate icon on load
+    window.onload = generateIcon;
+  </script>
+</body>
+</html>
