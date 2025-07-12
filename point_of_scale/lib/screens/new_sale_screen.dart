@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/pdf_service.dart';
-import '../services/sms_service.dart';
-import 'package:share_plus/share_plus.dart';
+import '../services/performance_service.dart';
 import 'dart:io'; // Added for File
 import 'dart:convert'; // Added for json
 import 'package:http/http.dart' as http; // Added for http
 import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
 
 class NewSaleScreen extends StatefulWidget {
   const NewSaleScreen({super.key});
@@ -17,6 +17,9 @@ class NewSaleScreen extends StatefulWidget {
 
 class _NewSaleScreenState extends State<NewSaleScreen> {
   final List<Map<String, dynamic>> _cartItems = [];
+
+  // Performance monitoring
+  final PerformanceService _performanceService = PerformanceService();
 
   // Controllers for add product dialog
   final TextEditingController _nameController = TextEditingController();
@@ -47,7 +50,29 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   // Estimate number variable
   String _currentEstimateNumber = '';
 
+  // Cache for expensive computations
+  double? _cachedSubtotal;
+  double? _cachedTotal;
+  double? _cachedDiscountAmount;
+  bool _cacheInvalidated = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _performanceService.startOperation('NewSaleScreen.initState');
+    _performanceService.endOperation('NewSaleScreen.initState');
+  }
+
+  void _invalidateCache() {
+    _cachedSubtotal = null;
+    _cachedTotal = null;
+    _cachedDiscountAmount = null;
+    _cacheInvalidated = true;
+  }
+
   void _showAddProductDialog() {
+    _performanceService.startOperation('NewSaleScreen.showAddProductDialog');
+
     _nameController.clear();
     _priceController.clear();
     _quantityController.clear();
@@ -96,6 +121,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         );
       },
     );
+
+    _performanceService.endOperation('NewSaleScreen.showAddProductDialog');
   }
 
   Widget _buildInputField(
@@ -125,6 +152,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   }
 
   void _addNewProduct() {
+    _performanceService.startOperation('NewSaleScreen.addNewProduct');
+
     if (_nameController.text.isEmpty ||
         _priceController.text.isEmpty ||
         _quantityController.text.isEmpty) {
@@ -158,26 +187,53 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         'price': price,
         'quantity': quantity,
       });
+      _invalidateCache();
     });
+
+    _performanceService.endOperation('NewSaleScreen.addNewProduct');
   }
 
   double get _subtotal {
-    return _cartItems.fold(
-      0.0,
-      (sum, item) => sum + (item['price'] * item['quantity']),
-    );
+    if (_cachedSubtotal != null && !_cacheInvalidated) {
+      return _cachedSubtotal!;
+    }
+
+    _performanceService.startOperation('NewSaleScreen.computeSubtotal');
+
+    _cachedSubtotal = _cartItems.fold<double>(0.0, (sum, item) {
+      final price = (item['price'] as num?)?.toDouble() ?? 0.0;
+      final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
+      return sum + (price * quantity);
+    });
+
+    _performanceService.endOperation('NewSaleScreen.computeSubtotal');
+    return _cachedSubtotal ?? 0.0;
   }
 
   double get _total {
-    return _subtotal - _getDiscountAmount();
+    if (_cachedTotal != null && !_cacheInvalidated) {
+      return _cachedTotal!;
+    }
+
+    _cachedTotal = _subtotal - _getDiscountAmount();
+    return _cachedTotal!;
   }
 
   double _getDiscountAmount() {
-    if (_isPercentageDiscount) {
-      return (_subtotal * _discountAmount) / 100;
-    } else {
-      return _discountAmount;
+    if (_cachedDiscountAmount != null && !_cacheInvalidated) {
+      return _cachedDiscountAmount!;
     }
+
+    _performanceService.startOperation('NewSaleScreen.computeDiscount');
+
+    if (_isPercentageDiscount) {
+      _cachedDiscountAmount = (_subtotal * _discountAmount) / 100;
+    } else {
+      _cachedDiscountAmount = _discountAmount;
+    }
+
+    _performanceService.endOperation('NewSaleScreen.computeDiscount');
+    return _cachedDiscountAmount ?? 0.0;
   }
 
   // Get discount percentage equivalent when fixed amount is used
@@ -193,6 +249,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   }
 
   void _showEditItemDialog(Map<String, dynamic> item) {
+    _performanceService.startOperation('NewSaleScreen.showEditItemDialog');
+
     final TextEditingController nameController = TextEditingController(
       text: item['name'],
     );
@@ -259,6 +317,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         );
       },
     );
+
+    _performanceService.endOperation('NewSaleScreen.showEditItemDialog');
   }
 
   void _updateItem(
@@ -267,6 +327,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     TextEditingController priceController,
     TextEditingController quantityController,
   ) {
+    _performanceService.startOperation('NewSaleScreen.updateItem');
+
     if (nameController.text.isEmpty ||
         priceController.text.isEmpty ||
         quantityController.text.isEmpty) {
@@ -299,6 +361,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         _cartItems[index]['price'] = price;
         _cartItems[index]['quantity'] = quantity;
       }
+      _invalidateCache();
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -307,15 +370,24 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         backgroundColor: const Color(0xFF6B8E7F),
       ),
     );
+
+    _performanceService.endOperation('NewSaleScreen.updateItem');
   }
 
   void _removeFromCart(int productId) {
+    _performanceService.startOperation('NewSaleScreen.removeFromCart');
+
     setState(() {
       _cartItems.removeWhere((item) => item['id'] == productId);
+      _invalidateCache();
     });
+
+    _performanceService.endOperation('NewSaleScreen.removeFromCart');
   }
 
   void _completeSale() {
+    _performanceService.startOperation('NewSaleScreen.completeSale');
+
     if (_cartItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -327,6 +399,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     }
 
     _showContinueOptionsDialog();
+
+    _performanceService.endOperation('NewSaleScreen.completeSale');
   }
 
   void _showContinueOptionsDialog() {
@@ -435,9 +509,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                     _buildInputField('Customer Name', _customerNameController),
                     const SizedBox(height: 12),
 
-                    // WhatsApp Number
+                    // Phone Number (for reference only)
                     _buildInputField(
-                      'WhatsApp Number',
+                      'Phone Number (Optional)',
                       _customerWhatsAppController,
                       isNumber: true,
                     ),
@@ -526,11 +600,12 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                   ),
                   onPressed: () {
                     if (_customerNameController.text.isEmpty ||
-                        _customerWhatsAppController.text.isEmpty ||
                         _customerAddressController.text.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Please fill all customer details'),
+                          content: Text(
+                            'Please fill customer name and address',
+                          ),
                           backgroundColor: Colors.red,
                         ),
                       );
@@ -599,11 +674,13 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                   style: TextStyle(color: Colors.grey[300], fontSize: 12),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  'WhatsApp: ${_customerWhatsAppController.text}',
-                  style: TextStyle(color: Colors.grey[300], fontSize: 12),
-                ),
-                const SizedBox(height: 2),
+                if (_customerWhatsAppController.text.isNotEmpty) ...[
+                  Text(
+                    'Phone: ${_customerWhatsAppController.text}',
+                    style: TextStyle(color: Colors.grey[300], fontSize: 12),
+                  ),
+                  const SizedBox(height: 2),
+                ],
                 Text(
                   'Address: ${_customerAddressController.text}',
                   style: TextStyle(color: Colors.grey[300], fontSize: 12),
@@ -727,8 +804,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 Navigator.of(context).pop();
                 _sendEstimate();
               },
-              icon: const Icon(Icons.send, size: 16),
-              label: const Text('Send Estimate'),
+              icon: const Icon(Icons.save, size: 16),
+              label: const Text('Save Estimate'),
             ),
           ],
         );
@@ -737,6 +814,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   }
 
   void _sendEstimate() async {
+    _performanceService.startOperation('NewSaleScreen.sendEstimate');
+
     // Show sending animation/loading
     showDialog(
       context: context,
@@ -800,7 +879,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
           createdAt: DateTime.now(),
         );
 
-        // Show success dialog with SMS options
+        // Show success dialog with options
         _showEstimateSuccessDialog(response, pdfFile);
       } else {
         // Show error dialog
@@ -812,6 +891,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
       Navigator.of(context).pop(); // Close loading dialog
       _showEstimateErrorDialog('An error occurred: ${error.toString()}');
     }
+
+    _performanceService.endOperation('NewSaleScreen.sendEstimate');
   }
 
   void _showEstimateSuccessDialog(Map<String, dynamic> response, File pdfFile) {
@@ -853,7 +934,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               ],
               const SizedBox(height: 16),
               const Text(
-                'You can now print the estimate:',
+                'Estimate saved successfully! You can now print it:',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 12,
@@ -1281,11 +1362,13 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                   style: TextStyle(color: Colors.grey[300], fontSize: 12),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  'WhatsApp: ${_customerWhatsAppController.text}',
-                  style: TextStyle(color: Colors.grey[300], fontSize: 12),
-                ),
-                const SizedBox(height: 2),
+                if (_customerWhatsAppController.text.isNotEmpty) ...[
+                  Text(
+                    'Phone: ${_customerWhatsAppController.text}',
+                    style: TextStyle(color: Colors.grey[300], fontSize: 12),
+                  ),
+                  const SizedBox(height: 2),
+                ],
                 Text(
                   'Address: ${_customerAddressController.text}',
                   style: TextStyle(color: Colors.grey[300], fontSize: 12),
@@ -1425,17 +1508,6 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Close', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6B8E7F),
-              ),
-              onPressed: () {
-                Navigator.of(context).pop();
-                _sendBill();
-              },
-              icon: const Icon(Icons.send, size: 16),
-              label: const Text('Send Bill'),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -1610,18 +1682,72 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     if (discount != null && discount >= 0) {
       setState(() {
         _discountAmount = discount;
+        _invalidateCache();
       });
     }
   }
 
-  void _showSaleCompletedDialog() {
+  void _showSaleCompletedDialog() async {
+    // Show loading dialog first
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return const AlertDialog(
+          backgroundColor: Color(0xFF1A1A1A),
+          content: Row(
+            children: [
+              CircularProgressIndicator(color: Color(0xFF6B8E7F)),
+              SizedBox(width: 20),
+              Text(
+                'Saving sale data...',
+                style: TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    try {
+      // Save sale data to backend
+      final result = await ApiService.createCompletedSale(
+        customerName: _customerNameController.text,
+        customerPhone: _customerWhatsAppController.text,
+        customerAddress: _customerAddressController.text,
+        saleBy: _selectedSaleBy,
+        items: _cartItems,
+        subtotal: _subtotal,
+        discountAmount: _discountAmount,
+        isPercentageDiscount: _isPercentageDiscount,
+        total: _total,
+      );
+
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      if (result['success']) {
+        // Show success dialog with PDF options
+        _showSaleSuccessDialog(result['sale_number'] ?? 'Unknown');
+      } else {
+        // Show error dialog
+        _showSaleErrorDialog(result['message'] ?? 'Failed to save sale data');
+      }
+    } catch (e) {
+      // Close loading dialog
+      Navigator.of(context).pop();
+      _showSaleErrorDialog('Error: $e');
+    }
+  }
+
+  void _showSaleSuccessDialog(String saleNumber) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF1A1A1A),
           title: const Text(
-            'Sale Completed!',
+            'Sale Completed Successfully!',
             style: TextStyle(color: Colors.white),
           ),
           content: Column(
@@ -1629,10 +1755,19 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
+                'Sale Number: $saleNumber',
+                style: const TextStyle(
+                  color: Color(0xFF6B8E7F),
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
                 'Total Amount: Rs. ${_total.toStringAsFixed(2)}',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -1640,6 +1775,11 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               Text(
                 'Items: ${_cartItems.length}',
                 style: TextStyle(color: Colors.grey[400]),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'What would you like to do?',
+                style: TextStyle(color: Colors.white, fontSize: 14),
               ),
             ],
           ),
@@ -1651,6 +1791,17 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               },
               child: const Text('Home', style: TextStyle(color: Colors.grey)),
             ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2A2A2A),
+              ),
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _printSalePdf(saleNumber);
+              },
+              icon: const Icon(Icons.print, size: 16),
+              label: const Text('Print PDF'),
+            ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF6B8E7F),
@@ -1660,9 +1811,10 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 setState(() {
                   _cartItems.clear();
                   _discountAmount = 0.0;
+                  _invalidateCache();
                 });
               },
-              child: const Text('Continue'),
+              child: const Text('New Sale'),
             ),
           ],
         );
@@ -1670,10 +1822,118 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     );
   }
 
+  void _showSaleErrorDialog(String errorMessage) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          title: const Text('Error', style: TextStyle(color: Colors.red)),
+          content: Text(
+            errorMessage,
+            style: const TextStyle(color: Colors.white),
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6B8E7F),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _printSalePdf(String saleNumber) async {
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            backgroundColor: Color(0xFF1A1A1A),
+            content: Row(
+              children: [
+                CircularProgressIndicator(color: Color(0xFF6B8E7F)),
+                SizedBox(width: 20),
+                Text(
+                  'Generating PDF...',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+
+      // Generate sale PDF
+      final pdfFile = await PdfService.generateSalePdf(
+        saleNumber: saleNumber,
+        customerName: _customerNameController.text,
+        customerPhone: _customerWhatsAppController.text,
+        customerAddress: _customerAddressController.text,
+        saleBy: _selectedSaleBy,
+        items: _cartItems,
+        subtotal: _subtotal,
+        discountAmount: _discountAmount,
+        isPercentageDiscount: _isPercentageDiscount,
+        total: _total,
+        createdAt: DateTime.now(),
+      );
+
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      // Print the PDF
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdfFile.readAsBytesSync(),
+      );
+    } catch (e) {
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      // Show error dialog
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1A),
+            title: const Text(
+              'Print Error',
+              style: TextStyle(color: Colors.red),
+            ),
+            content: Text(
+              'Failed to print PDF: $e',
+              style: const TextStyle(color: Colors.white),
+            ),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6B8E7F),
+                ),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
+
   void _clearCart() {
     setState(() {
       _cartItems.clear();
       _discountAmount = 0.0;
+      _invalidateCache();
     });
   }
 
@@ -1718,6 +1978,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     _customerNameController.dispose();
     _customerWhatsAppController.dispose();
     _customerAddressController.dispose();
+    _performanceService.dispose();
     super.dispose();
   }
 
