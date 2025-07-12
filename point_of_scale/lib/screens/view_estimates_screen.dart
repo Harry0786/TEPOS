@@ -29,15 +29,7 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
   @override
   void initState() {
     super.initState();
-    _initializeWebSocket();
-    _loadEstimates();
-  }
-
-  void _initializeWebSocket() {
-    _webSocketService = WebSocketService(
-      serverUrl: 'wss://pos-2wc9.onrender.com/ws',
-    );
-
+    _webSocketService = WebSocketService(serverUrl: ApiService.webSocketUrl);
     _webSocketService.connect();
 
     // Listen for real-time updates
@@ -52,6 +44,7 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
         }
       }
     });
+    _loadEstimates();
   }
 
   Future<void> _loadEstimates() async {

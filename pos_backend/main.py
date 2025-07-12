@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from routers import estimate_route, orders_route_new, sms_route
 from database.database import connect_to_mongo, close_mongo_connection
 from services.websocket_service import websocket_manager
+from config import Config
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -18,10 +19,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# Print configuration for debugging
+Config.print_configuration()
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure this for production
+    allow_origins=Config.get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,9 +37,10 @@ app.include_router(orders_route_new.router, prefix="/api")
 app.include_router(sms_route.router)
 
 # Serve static files (for public PDF access)
-if not os.path.exists('static/estimates'):
-    os.makedirs('static/estimates')
-app.mount("/static", StaticFiles(directory="static"), name="static")
+static_dir = Config.get_static_dir()
+if not os.path.exists(f'{static_dir}/estimates'):
+    os.makedirs(f'{static_dir}/estimates')
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 @app.get("/")
 async def root():

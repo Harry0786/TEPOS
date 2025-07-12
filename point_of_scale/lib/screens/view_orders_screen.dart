@@ -22,14 +22,7 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
   @override
   void initState() {
     super.initState();
-    _initializeWebSocket();
-    _loadOrders();
-  }
-
-  void _initializeWebSocket() {
-    _webSocketService = WebSocketService(
-      serverUrl: 'wss://pos-2wc9.onrender.com/ws',
-    );
+    _webSocketService = WebSocketService(serverUrl: ApiService.webSocketUrl);
     _webSocketService.connect();
     _webSocketService.messageStream.listen((message) {
       if (message == 'order_updated' ||
@@ -40,6 +33,7 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
         }
       }
     });
+    _loadOrders();
   }
 
   Future<void> _loadOrders() async {

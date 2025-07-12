@@ -52,15 +52,17 @@ class _HomeScreenState extends State<HomeScreen>
   void initState() {
     super.initState();
     _performanceService.startOperation('HomeScreen.initState');
+
+    // Print current API configuration for debugging
+    ApiService.printConfiguration();
+
     _initializeWebSocket();
     _loadOrders();
     _performanceService.endOperation('HomeScreen.initState');
   }
 
   void _initializeWebSocket() {
-    _webSocketService = WebSocketService(
-      serverUrl: 'wss://pos-2wc9.onrender.com/ws',
-    );
+    _webSocketService = WebSocketService(serverUrl: ApiService.webSocketUrl);
     _webSocketService.connect();
 
     // Monitor connection status periodically
@@ -271,11 +273,7 @@ class _HomeScreenState extends State<HomeScreen>
                     ? const Color(0xFF4CAF50)
                     : const Color(0xFFFF5722),
               ),
-              _buildStatusRow(
-                'Server',
-                'wss://pos-2wc9.onrender.com/ws',
-                Colors.grey,
-              ),
+              _buildStatusRow('Server', ApiService.webSocketUrl, Colors.grey),
               if (_lastConnectionTime != null)
                 _buildStatusRow(
                   'Last Connected',

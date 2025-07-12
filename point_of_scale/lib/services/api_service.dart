@@ -2,16 +2,18 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // Use your computer's actual IP address instead of localhost
-  // You can find your IP by running 'ipconfig' on Windows or 'ifconfig' on Mac/Linux
-  // For development, you can also use 10.0.2.2 for Android emulator
-  static const String baseUrl =
-      'https://pos-2wc9.onrender.com/api'; // Updated to Render live backend
+  // ===== PRODUCTION CONFIGURATION =====
+  // Render production URLs only
+  static const String baseUrl = 'https://pos-2wc9.onrender.com/api';
+  static const String webSocketUrl = 'wss://pos-2wc9.onrender.com/ws';
 
-  // Alternative URLs for different scenarios:
-  // static const String baseUrl = 'http://10.0.2.2:8000/api'; // Android Emulator
-  // static const String baseUrl = 'http://localhost:8000/api'; // iOS Simulator
-  // static const String baseUrl = 'http://127.0.0.1:8000/api'; // Same machine
+  // Helper method to print current configuration
+  static void printConfiguration() {
+    print('🌐 API Configuration:');
+    print('   Environment: PRODUCTION (Render)');
+    print('   API Base URL: $baseUrl');
+    print('   WebSocket URL: $webSocketUrl');
+  }
 
   // Cache for API responses
   static final Map<String, dynamic> _cache = {};
