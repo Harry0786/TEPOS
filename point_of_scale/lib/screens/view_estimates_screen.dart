@@ -43,9 +43,13 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
     // Listen for real-time updates
     _webSocketService.messageStream.listen((message) {
       print('🔄 Real-time update received in estimates screen: $message');
-      if (message == 'estimate_updated' || message == 'order_updated') {
+      if (message == 'estimate_updated' ||
+          message == 'order_updated' ||
+          message == 'sale_completed') {
         // Refresh estimates when backend notifies of changes
-        _loadEstimates();
+        if (mounted) {
+          _loadEstimates();
+        }
       }
     });
   }

@@ -77,8 +77,12 @@ class _HomeScreenState extends State<HomeScreen>
     });
 
     _webSocketService.messageStream.listen((message) {
-      if (message == 'estimate_updated' || message == 'order_updated') {
-        _loadOrders();
+      if (message == 'estimate_updated' ||
+          message == 'order_updated' ||
+          message == 'sale_completed') {
+        if (mounted) {
+          _loadOrders();
+        }
       }
     });
   }
@@ -88,15 +92,17 @@ class _HomeScreenState extends State<HomeScreen>
 
     _performanceService.startOperation('HomeScreen.loadOrders');
 
-    setState(() {
-      _isRefreshing = true;
-    });
+    if (mounted) {
+      setState(() {
+        _isRefreshing = true;
+      });
+    }
 
     try {
       final orders = await ApiService.fetchOrders();
       if (mounted) {
         setState(() {
-          _orders = orders;
+          _orders = orders ?? [];
           _isLoading = false;
           _isRefreshing = false;
           _lastRefreshTime = DateTime.now();
@@ -105,6 +111,7 @@ class _HomeScreenState extends State<HomeScreen>
         });
       }
     } catch (e) {
+      print('❌ Error loading orders: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -146,18 +153,27 @@ class _HomeScreenState extends State<HomeScreen>
     int totalEstimates = 0;
     int completedSales = 0;
 
-    for (final order in _orders) {
-      final status = order['status']?.toString().toLowerCase() ?? '';
+    try {
+      for (final order in _orders) {
+        final status = order['status']?.toString().toLowerCase() ?? '';
 
-      if (status == 'completed') {
-        completedSales++;
-        final amount = order['amount'];
-        final total = order['total'];
-        final value = (amount ?? total ?? 0.0);
-        totalSales += (value is num ? value.toDouble() : 0.0);
-      } else if (status == 'estimate' || status == 'pending') {
-        totalEstimates++;
+        if (status == 'completed') {
+          completedSales++;
+          final amount = order['amount'];
+          final total = order['total'];
+          final value = (amount ?? total ?? 0.0);
+          totalSales += (value is num ? value.toDouble() : 0.0);
+        } else if (status == 'estimate' || status == 'pending') {
+          totalEstimates++;
+        }
       }
+    } catch (e) {
+      print('❌ Error computing order stats: $e');
+      // Use safe defaults
+      totalSales = 0.0;
+      totalOrders = _orders.length;
+      totalEstimates = 0;
+      completedSales = 0;
     }
 
     _cachedOrderStats = {
@@ -185,15 +201,26 @@ class _HomeScreenState extends State<HomeScreen>
 
     _performanceService.startOperation('HomeScreen.computeRecentOrders');
 
-    // Use a more efficient sorting approach
-    final sorted = List<Map<String, dynamic>>.from(_orders);
-    sorted.sort((a, b) {
-      final aDate = _parseDate(a['created_at']);
-      final bDate = _parseDate(b['created_at']);
-      return bDate.compareTo(aDate);
-    });
+    try {
+      // Use a more efficient sorting approach
+      final sorted = List<Map<String, dynamic>>.from(_orders);
+      sorted.sort((a, b) {
+        try {
+          final aDate = _parseDate(a['created_at']);
+          final bDate = _parseDate(b['created_at']);
+          return bDate.compareTo(aDate);
+        } catch (e) {
+          print('❌ Error sorting orders: $e');
+          return 0;
+        }
+      });
 
-    _cachedRecentOrders = sorted.take(5).toList();
+      _cachedRecentOrders = sorted.take(5).toList();
+    } catch (e) {
+      print('❌ Error computing recent orders: $e');
+      _cachedRecentOrders = [];
+    }
+
     _performanceService.endOperation('HomeScreen.computeRecentOrders');
 
     return _cachedRecentOrders!;
@@ -202,7 +229,12 @@ class _HomeScreenState extends State<HomeScreen>
   DateTime _parseDate(dynamic dateValue) {
     if (dateValue == null) return DateTime.now();
     if (dateValue is DateTime) return dateValue;
-    return DateTime.tryParse(dateValue.toString()) ?? DateTime.now();
+    try {
+      return DateTime.tryParse(dateValue.toString()) ?? DateTime.now();
+    } catch (e) {
+      print('❌ Error parsing date: $dateValue, error: $e');
+      return DateTime.now();
+    }
   }
 
   void _showConnectionStatus() {

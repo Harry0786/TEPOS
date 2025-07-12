@@ -32,8 +32,12 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
     );
     _webSocketService.connect();
     _webSocketService.messageStream.listen((message) {
-      if (message == 'order_updated' || message == 'estimate_updated') {
-        _loadOrders();
+      if (message == 'order_updated' ||
+          message == 'estimate_updated' ||
+          message == 'sale_completed') {
+        if (mounted) {
+          _loadOrders();
+        }
       }
     });
   }
