@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/websocket_service.dart';
+import '../services/pdf_service.dart';
+import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
 
 class ViewOrdersScreen extends StatefulWidget {
   const ViewOrdersScreen({super.key});
@@ -41,7 +44,7 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
     });
     final orders = await ApiService.fetchOrders();
     setState(() {
-      _orders = orders.where((o) => o['status'] == 'Completed').toList();
+      _orders = orders; // Show all orders and estimates
       _filteredOrders = _orders;
       _isLoading = false;
     });
@@ -55,23 +58,49 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
                 order['customer_name'].toString().toLowerCase().contains(
                   _searchQuery.toLowerCase(),
                 ) ||
-                order['estimate_number'].toString().toLowerCase().contains(
-                  _searchQuery.toLowerCase(),
-                );
+                (order['estimate_number']?.toString().toLowerCase().contains(
+                      _searchQuery.toLowerCase(),
+                    ) ??
+                    false) ||
+                (order['sale_number']?.toString().toLowerCase().contains(
+                      _searchQuery.toLowerCase(),
+                    ) ??
+                    false);
             return matchesSearch;
           }).toList();
     });
   }
 
   void _showOrderDetails(Map<String, dynamic> order) {
+    final bool isOrder =
+        order['type'] == 'order' || order['status'] == 'Completed';
+    final String orderNumber =
+        isOrder
+            ? (order['sale_number'] ?? order['order_id'] ?? 'Unknown')
+            : (order['estimate_number'] ?? order['estimate_id'] ?? 'Unknown');
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF1A1A1A),
-          title: Text(
-            'Order ${order['estimate_number'] ?? order['id']}',
-            style: const TextStyle(color: Colors.white),
+          title: Row(
+            children: [
+              Icon(
+                isOrder ? Icons.receipt : Icons.description,
+                color:
+                    isOrder ? const Color(0xFF4CAF50) : const Color(0xFFFF9800),
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${isOrder ? 'Order' : 'Estimate'} $orderNumber',
+                  style: const TextStyle(color: Colors.white),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
           content: SingleChildScrollView(
             child: Column(
@@ -83,9 +112,11 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
                 _buildDetailRow('Address', order['customer_address'] ?? ''),
                 _buildDetailRow('Sale By', order['sale_by'] ?? ''),
                 _buildDetailRow('Status', order['status'] ?? ''),
+                if (isOrder && order['payment_mode'] != null)
+                  _buildDetailRow('Payment Mode', order['payment_mode'] ?? ''),
                 _buildDetailRow(
                   'Date',
-                  order['created_at'].toString().split(' ')[0],
+                  order['time'] ?? order['created_at'].toString().split(' ')[0],
                 ),
                 const SizedBox(height: 16),
                 const Text(
@@ -146,6 +177,17 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Close', style: TextStyle(color: Colors.grey)),
             ),
+            if (isOrder)
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6B8E7F),
+                ),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _printOrderPdf(order);
+                },
+                child: const Text('Print PDF'),
+              ),
           ],
         );
       },
@@ -185,13 +227,97 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
     super.dispose();
   }
 
+  Future<void> _printOrderPdf(Map<String, dynamic> order) async {
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            backgroundColor: Color(0xFF1A1A1A),
+            content: Row(
+              children: [
+                CircularProgressIndicator(color: Color(0xFF6B8E7F)),
+                SizedBox(width: 20),
+                Text(
+                  'Generating PDF...',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+
+      // Generate order PDF
+      final pdfFile = await PdfService.generateSalePdf(
+        saleNumber: order['sale_number'] ?? 'Unknown',
+        customerName: order['customer_name'] ?? '',
+        customerPhone: order['customer_phone'] ?? '',
+        customerAddress: order['customer_address'] ?? '',
+        saleBy: order['sale_by'] ?? '',
+        items: List<Map<String, dynamic>>.from(order['items'] ?? []),
+        subtotal: order['subtotal'] ?? 0.0,
+        discountAmount: order['discount_amount'] ?? 0.0,
+        isPercentageDiscount: order['is_percentage_discount'] ?? false,
+        total: order['total'] ?? order['amount'] ?? 0.0,
+        createdAt:
+            DateTime.tryParse(order['created_at'].toString()) ?? DateTime.now(),
+      );
+
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      // Print the PDF
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdfFile.readAsBytesSync(),
+      );
+    } catch (e) {
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      // Show error dialog
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1A),
+            title: const Text(
+              'Print Error',
+              style: TextStyle(color: Colors.red),
+            ),
+            content: Text(
+              'Failed to print PDF: $e',
+              style: const TextStyle(color: Colors.white),
+            ),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6B8E7F),
+                ),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0B0B0B),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text('View Orders', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Orders & Estimates',
+          style: TextStyle(color: Colors.white),
+        ),
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
       ),
@@ -288,7 +414,8 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
                                       title: Row(
                                         children: [
                                           Text(
-                                            order['estimate_number'] ??
+                                            order['sale_number'] ??
+                                                order['estimate_number'] ??
                                                 order['id'],
                                             style: const TextStyle(
                                               color: Colors.white,
@@ -303,16 +430,34 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
                                               vertical: 4,
                                             ),
                                             decoration: BoxDecoration(
-                                              color: const Color(
-                                                0xFF4CAF50,
-                                              ).withOpacity(0.2),
+                                              color:
+                                                  (order['status'] ==
+                                                              'Completed' ||
+                                                          order['type'] ==
+                                                              'order')
+                                                      ? const Color(
+                                                        0xFF4CAF50,
+                                                      ).withOpacity(0.2)
+                                                      : const Color(
+                                                        0xFFFF9800,
+                                                      ).withOpacity(0.2),
                                               borderRadius:
                                                   BorderRadius.circular(12),
                                             ),
-                                            child: const Text(
-                                              'Completed',
+                                            child: Text(
+                                              order['status'] ?? 'Pending',
                                               style: TextStyle(
-                                                color: Color(0xFF4CAF50),
+                                                color:
+                                                    (order['status'] ==
+                                                                'Completed' ||
+                                                            order['type'] ==
+                                                                'order')
+                                                        ? const Color(
+                                                          0xFF4CAF50,
+                                                        )
+                                                        : const Color(
+                                                          0xFFFF9800,
+                                                        ),
                                                 fontSize: 11,
                                                 fontWeight: FontWeight.bold,
                                               ),
@@ -342,9 +487,10 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            order['created_at']
-                                                .toString()
-                                                .split(' ')[0],
+                                            order['time'] ??
+                                                order['created_at']
+                                                    .toString()
+                                                    .split(' ')[0],
                                             style: TextStyle(
                                               color: Colors.grey[500],
                                               fontSize: 12,
@@ -359,7 +505,7 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
                                             CrossAxisAlignment.end,
                                         children: [
                                           Text(
-                                            'Rs. ${order['total'].toStringAsFixed(0)}',
+                                            'Rs. ${(order['total'] ?? order['amount'] ?? 0.0).toStringAsFixed(0)}',
                                             style: const TextStyle(
                                               color: Color(0xFF6B8E7F),
                                               fontSize: 16,
@@ -368,7 +514,7 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            '${order['items'].length} items',
+                                            '${(order['items'] as List<dynamic>?)?.length ?? order['items_count'] ?? 0} items',
                                             style: TextStyle(
                                               color: Colors.grey[500],
                                               fontSize: 11,

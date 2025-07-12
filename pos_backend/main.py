@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 from contextlib import asynccontextmanager
 
-from routers import estimate_route, orders_route, sms_route
+from routers import estimate_route, orders_route_new, sms_route
 from database.database import connect_to_mongo, close_mongo_connection
 from services.websocket_service import websocket_manager
 
@@ -29,7 +29,7 @@ app.add_middleware(
 
 # Include routers with API prefix
 app.include_router(estimate_route.router, prefix="/api")
-app.include_router(orders_route.router, prefix="/api")
+app.include_router(orders_route_new.router, prefix="/api")
 app.include_router(sms_route.router)
 
 # Serve static files (for public PDF access)

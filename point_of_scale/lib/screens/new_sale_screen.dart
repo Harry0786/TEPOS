@@ -38,6 +38,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   final TextEditingController _customerAddressController =
       TextEditingController();
 
+  // Payment mode variable
+  String _selectedPaymentMode = 'Cash';
+
   // Sale by variable
   String _selectedSaleBy = 'Rajesh Goyal'; // Default selection
   final List<String> _saleByOptions = [
@@ -1123,7 +1126,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     _customerWhatsAppController.clear();
     _customerAddressController.clear();
     _selectedSaleBy = 'Rajesh Goyal'; // Reset to default
-    String _selectedPaymentMode = 'Cash';
+    _selectedPaymentMode = 'Cash'; // Reset to default
 
     showDialog(
       context: context,
@@ -1710,7 +1713,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     );
 
     try {
-      // Save sale data to backend
+      // Save sale data to backend with timeout
       final result = await ApiService.createCompletedSale(
         customerName: _customerNameController.text,
         customerPhone: _customerWhatsAppController.text,
@@ -1721,34 +1724,59 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         discountAmount: _discountAmount,
         isPercentageDiscount: _isPercentageDiscount,
         total: _total,
+        paymentMode: _selectedPaymentMode,
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception('Request timeout - please check your connection');
+        },
       );
 
       // Close loading dialog
-      Navigator.of(context).pop();
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
 
       if (result['success']) {
         // Show success dialog with PDF options
-        _showSaleSuccessDialog(result['sale_number'] ?? 'Unknown');
+        if (mounted) {
+          _showSaleSuccessDialog(result['sale_number'] ?? 'Unknown');
+        }
       } else {
         // Show error dialog
-        _showSaleErrorDialog(result['message'] ?? 'Failed to save sale data');
+        if (mounted) {
+          _showSaleErrorDialog(result['message'] ?? 'Failed to save sale data');
+        }
       }
     } catch (e) {
       // Close loading dialog
-      Navigator.of(context).pop();
-      _showSaleErrorDialog('Error: $e');
+      if (mounted) {
+        Navigator.of(context).pop();
+        _showSaleErrorDialog('Error: $e');
+      }
     }
   }
 
   void _showSaleSuccessDialog(String saleNumber) {
     showDialog(
       context: context,
+      barrierDismissible: false, // Prevent accidental dismissal
       builder: (BuildContext context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF1A1A1A),
-          title: const Text(
-            'Sale Completed Successfully!',
-            style: TextStyle(color: Colors.white),
+          title: Row(
+            children: [
+              const Icon(
+                Icons.check_circle,
+                color: Color(0xFF4CAF50),
+                size: 24,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Sale Completed!',
+                style: TextStyle(color: Colors.white),
+              ),
+            ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1773,27 +1801,31 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               ),
               const SizedBox(height: 8),
               Text(
+                'Payment Mode: $_selectedPaymentMode',
+                style: TextStyle(color: Colors.grey[400], fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Text(
                 'Items: ${_cartItems.length}',
-                style: TextStyle(color: Colors.grey[400]),
+                style: TextStyle(color: Colors.grey[400], fontSize: 14),
               ),
               const SizedBox(height: 16),
               const Text(
-                'What would you like to do?',
-                style: TextStyle(color: Colors.white, fontSize: 14),
+                'What would you like to do next?',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
           actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).pop(); // Go back to home screen
-              },
-              child: const Text('Home', style: TextStyle(color: Colors.grey)),
-            ),
+            // Print PDF Button
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2A2A2A),
+                foregroundColor: Colors.white,
               ),
               onPressed: () async {
                 Navigator.of(context).pop();
@@ -1802,9 +1834,12 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               icon: const Icon(Icons.print, size: 16),
               label: const Text('Print PDF'),
             ),
-            ElevatedButton(
+            SizedBox(width: 8),
+            // New Sale Button
+            ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF6B8E7F),
+                foregroundColor: Colors.white,
               ),
               onPressed: () {
                 Navigator.of(context).pop();
@@ -1814,7 +1849,18 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                   _invalidateCache();
                 });
               },
-              child: const Text('New Sale'),
+              icon: const Icon(Icons.add_shopping_cart, size: 16),
+              label: const Text('New Sale'),
+            ),
+            SizedBox(width: 8),
+            // Home Button
+            TextButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pop(); // Go back to home screen
+              },
+              icon: const Icon(Icons.home, size: 16, color: Colors.grey),
+              label: const Text('Home', style: TextStyle(color: Colors.grey)),
             ),
           ],
         );
@@ -1825,23 +1871,65 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   void _showSaleErrorDialog(String errorMessage) {
     showDialog(
       context: context,
+      barrierDismissible: false, // Prevent accidental dismissal
       builder: (BuildContext context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF1A1A1A),
-          title: const Text('Error', style: TextStyle(color: Colors.red)),
-          content: Text(
-            errorMessage,
-            style: const TextStyle(color: Colors.white),
+          title: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.red, size: 24),
+              const SizedBox(width: 8),
+              const Text(
+                'Error',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Failed to save sale data:',
+                style: TextStyle(color: Colors.grey[400], fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                errorMessage,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Please check your connection and try again.',
+                style: TextStyle(color: Colors.grey[400], fontSize: 12),
+              ),
+            ],
           ),
           actions: [
-            ElevatedButton(
+            // Retry Button
+            ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF6B8E7F),
+                foregroundColor: Colors.white,
               ),
               onPressed: () {
                 Navigator.of(context).pop();
+                _showSaleCompletedDialog(); // Retry the operation
               },
-              child: const Text('OK'),
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Retry'),
+            ),
+            const SizedBox(width: 8),
+            // Cancel Button
+            TextButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              icon: const Icon(Icons.close, size: 16, color: Colors.grey),
+              label: const Text('Cancel', style: TextStyle(color: Colors.grey)),
             ),
           ],
         );
@@ -1856,13 +1944,13 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         context: context,
         barrierDismissible: false,
         builder: (BuildContext context) {
-          return const AlertDialog(
+          return AlertDialog(
             backgroundColor: Color(0xFF1A1A1A),
             content: Row(
               children: [
-                CircularProgressIndicator(color: Color(0xFF6B8E7F)),
-                SizedBox(width: 20),
-                Text(
+                const CircularProgressIndicator(color: Color(0xFF6B8E7F)),
+                const SizedBox(width: 20),
+                const Text(
                   'Generating PDF...',
                   style: TextStyle(color: Colors.white),
                 ),

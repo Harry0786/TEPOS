@@ -1,17 +1,12 @@
 import requests
 import json
 
-def test_backend():
+def test_orders():
     try:
         # Test basic API endpoint
         response = requests.get('http://localhost:8000/api/')
         print(f"API Root Status: {response.status_code}")
         print(f"API Root Response: {response.json()}")
-        
-        # Test orders endpoint
-        response = requests.get('http://localhost:8000/api/orders/all')
-        print(f"Orders Status: {response.status_code}")
-        print(f"Orders Response: {response.json()}")
         
         # Test create-sale endpoint with sample data
         sample_data = {
@@ -23,7 +18,8 @@ def test_backend():
             "subtotal": 100,
             "discount_amount": 0,
             "is_percentage_discount": True,
-            "total": 100
+            "total": 100,
+            "payment_mode": "Cash"
         }
         
         response = requests.post(
@@ -34,10 +30,15 @@ def test_backend():
         print(f"Create Sale Status: {response.status_code}")
         print(f"Create Sale Response: {response.text}")
         
+        # Test get all orders
+        response = requests.get('http://localhost:8000/api/orders/all')
+        print(f"Get Orders Status: {response.status_code}")
+        print(f"Get Orders Response: {response.json()}")
+        
     except requests.exceptions.ConnectionError:
         print("Error: Could not connect to backend. Is the server running?")
     except Exception as e:
         print(f"Error: {e}")
 
 if __name__ == "__main__":
-    test_backend() 
+    test_orders() 

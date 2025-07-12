@@ -110,6 +110,7 @@ class ApiService {
     required double discountAmount,
     required bool isPercentageDiscount,
     required double total,
+    String paymentMode = "Cash",
   }) async {
     return _retryRequest(() async {
       final url = Uri.parse('$baseUrl/orders/create-sale');
@@ -136,6 +137,7 @@ class ApiService {
                 ? discountAmount
                 : (discountAmount / subtotal) * 100,
         'total': total,
+        'payment_mode': paymentMode,
         'created_at': DateTime.now().toIso8601String(),
       });
 

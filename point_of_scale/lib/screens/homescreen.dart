@@ -5,7 +5,10 @@ import 'view_estimates_screen.dart';
 import '../services/api_service.dart';
 import '../services/websocket_service.dart';
 import '../services/performance_service.dart';
+import '../services/pdf_service.dart';
 import 'view_orders_screen.dart';
+import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -788,14 +791,6 @@ class _HomeScreenState extends State<HomeScreen>
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (_recentOrders.length > 3)
-              TextButton(
-                onPressed: () {},
-                child: const Text(
-                  'See All',
-                  style: TextStyle(color: Color(0xFF6B8E7F)),
-                ),
-              ),
           ],
         ),
         const SizedBox(height: 6),
@@ -824,7 +819,7 @@ class _HomeScreenState extends State<HomeScreen>
                     : Column(
                       children:
                           _recentOrders
-                              .take(3)
+                              .take(5)
                               .map((order) => _buildOrderItem(order))
                               .toList(),
                     ),
@@ -845,106 +840,347 @@ class _HomeScreenState extends State<HomeScreen>
             ? order['items'].length
             : (order['items_count'] ?? 0);
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border:
-            isLast
-                ? null
-                : const Border(
-                  bottom: BorderSide(color: Color(0xFF3A3A3A), width: 0.5),
-                ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color:
-                  order['status'] == 'Completed'
-                      ? const Color(0xFF4CAF50).withOpacity(0.2)
-                      : const Color(0xFFFF9800).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
+    return GestureDetector(
+      onTap: () => _showOrderDetails(order),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border:
+              isLast
+                  ? null
+                  : const Border(
+                    bottom: BorderSide(color: Color(0xFF3A3A3A), width: 0.5),
+                  ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color:
+                    order['status'] == 'Completed'
+                        ? const Color(0xFF4CAF50).withOpacity(0.2)
+                        : const Color(0xFFFF9800).withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                order['status'] == 'Completed'
+                    ? Icons.check_circle
+                    : Icons.description,
+                color:
+                    order['status'] == 'Completed'
+                        ? const Color(0xFF4CAF50)
+                        : const Color(0xFFFF9800),
+                size: 18,
+              ),
             ),
-            child: Icon(
-              order['status'] == 'Completed'
-                  ? Icons.check_circle
-                  : Icons.description,
-              color:
-                  order['status'] == 'Completed'
-                      ? const Color(0xFF4CAF50)
-                      : const Color(0xFFFF9800),
-              size: 18,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    order['id'] ?? order['estimate_number'] ?? '',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    order['customer'] ?? order['customer_name'] ?? '',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                  ),
+                  Text(
+                    ' ${itemCount} items',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 10),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  order['id'] ?? order['estimate_number'] ?? '',
+                  ' Rs.  ${((order['amount'] ?? order['total'] ?? 0.0).toStringAsFixed(0))}',
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: Color(0xFF6B8E7F),
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  order['customer'] ?? order['customer_name'] ?? '',
-                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                  (order['time'] ??
+                      (order['created_at']?.toString().split(' ')[0] ?? '')),
+                  style: TextStyle(color: Colors.grey[400], fontSize: 11),
                 ),
-                Text(
-                  ' ${itemCount} items',
-                  style: TextStyle(color: Colors.grey[500], fontSize: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color:
+                        order['status'] == 'Completed'
+                            ? const Color(0xFF4CAF50).withOpacity(0.2)
+                            : const Color(0xFFFF9800).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    order['status'],
+                    style: TextStyle(
+                      color:
+                          order['status'] == 'Completed'
+                              ? const Color(0xFF4CAF50)
+                              : const Color(0xFFFF9800),
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showOrderDetails(Map<String, dynamic> order) {
+    final bool isOrder =
+        order['type'] == 'order' || order['status'] == 'Completed';
+    final String orderNumber =
+        isOrder
+            ? (order['sale_number'] ?? order['order_id'] ?? 'Unknown')
+            : (order['estimate_number'] ?? order['estimate_id'] ?? 'Unknown');
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          title: Row(
             children: [
-              Text(
-                ' Rs.  ${((order['amount'] ?? order['total'] ?? 0.0).toStringAsFixed(0))}',
-                style: const TextStyle(
-                  color: Color(0xFF6B8E7F),
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
+              Icon(
+                isOrder ? Icons.receipt : Icons.description,
+                color:
+                    isOrder ? const Color(0xFF4CAF50) : const Color(0xFFFF9800),
+                size: 20,
               ),
-              const SizedBox(height: 2),
-              Text(
-                (order['time'] ??
-                    (order['created_at']?.toString().split(' ')[0] ?? '')),
-                style: TextStyle(color: Colors.grey[400], fontSize: 11),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color:
-                      order['status'] == 'Completed'
-                          ? const Color(0xFF4CAF50).withOpacity(0.2)
-                          : const Color(0xFFFF9800).withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
+              const SizedBox(width: 8),
+              Expanded(
                 child: Text(
-                  order['status'],
-                  style: TextStyle(
-                    color:
-                        order['status'] == 'Completed'
-                            ? const Color(0xFF4CAF50)
-                            : const Color(0xFFFF9800),
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  '${isOrder ? 'Order' : 'Estimate'} $orderNumber',
+                  style: const TextStyle(color: Colors.white),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildDetailRow('Customer', order['customer_name'] ?? ''),
+                _buildDetailRow('Phone', order['customer_phone'] ?? ''),
+                _buildDetailRow('Address', order['customer_address'] ?? ''),
+                _buildDetailRow('Sale By', order['sale_by'] ?? ''),
+                _buildDetailRow('Status', order['status'] ?? ''),
+                if (isOrder && order['payment_mode'] != null)
+                  _buildDetailRow('Payment Mode', order['payment_mode'] ?? ''),
+                _buildDetailRow(
+                  'Date',
+                  order['time'] ?? order['created_at'].toString().split(' ')[0],
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Items:',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...(order['items'] as List<dynamic>?)
+                        ?.map<Widget>(
+                          (item) => Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '${item['name']} x${item['quantity']}',
+                                    style: TextStyle(color: Colors.grey[300]),
+                                  ),
+                                ),
+                                Text(
+                                  'Rs. ${(item['price'] * item['quantity']).toStringAsFixed(2)}',
+                                  style: TextStyle(color: Colors.grey[300]),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList() ??
+                    [],
+                const SizedBox(height: 12),
+                const Divider(color: Color(0xFF3A3A3A)),
+                const SizedBox(height: 8),
+                _buildDetailRow(
+                  'Subtotal',
+                  'Rs. ${(order['subtotal'] ?? 0.0).toStringAsFixed(2)}',
+                ),
+                if ((order['discount_amount'] ?? 0.0) > 0)
+                  _buildDetailRow(
+                    'Discount',
+                    (order['is_percentage_discount'] ?? false)
+                        ? '${order['discount_amount']}%'
+                        : 'Rs. ${order['discount_amount'].toStringAsFixed(2)}',
+                  ),
+                _buildDetailRow(
+                  'Total',
+                  'Rs. ${(order['total'] ?? order['amount'] ?? 0.0).toStringAsFixed(2)}',
+                  isTotal: true,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close', style: TextStyle(color: Colors.grey)),
+            ),
+            if (isOrder)
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6B8E7F),
+                ),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _printOrderPdf(order);
+                },
+                child: const Text('Print PDF'),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value, {bool isTotal = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            '$label:',
+            style: TextStyle(
+              color: Colors.grey[400],
+              fontSize: isTotal ? 16 : 14,
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                color: isTotal ? const Color(0xFF6B8E7F) : Colors.white,
+                fontSize: isTotal ? 16 : 14,
+                fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _printOrderPdf(Map<String, dynamic> order) async {
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const AlertDialog(
+            backgroundColor: Color(0xFF1A1A1A),
+            content: Row(
+              children: [
+                CircularProgressIndicator(color: Color(0xFF6B8E7F)),
+                SizedBox(width: 20),
+                Text(
+                  'Generating PDF...',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+
+      // Generate order PDF
+      final pdfFile = await PdfService.generateSalePdf(
+        saleNumber: order['sale_number'] ?? 'Unknown',
+        customerName: order['customer_name'] ?? '',
+        customerPhone: order['customer_phone'] ?? '',
+        customerAddress: order['customer_address'] ?? '',
+        saleBy: order['sale_by'] ?? '',
+        items: List<Map<String, dynamic>>.from(order['items'] ?? []),
+        subtotal: order['subtotal'] ?? 0.0,
+        discountAmount: order['discount_amount'] ?? 0.0,
+        isPercentageDiscount: order['is_percentage_discount'] ?? false,
+        total: order['total'] ?? order['amount'] ?? 0.0,
+        createdAt:
+            DateTime.tryParse(order['created_at'].toString()) ?? DateTime.now(),
+      );
+
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      // Print the PDF
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdfFile.readAsBytesSync(),
+      );
+    } catch (e) {
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      // Show error dialog
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1A),
+            title: const Text(
+              'Print Error',
+              style: TextStyle(color: Colors.red),
+            ),
+            content: Text(
+              'Failed to print PDF: $e',
+              style: const TextStyle(color: Colors.white),
+            ),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6B8E7F),
+                ),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          );
+        },
+      );
+    }
   }
 }
