@@ -18,7 +18,7 @@ async def connect_to_mongo():
             os.getenv("MONGODB_URL", "mongodb://localhost:27017"),
             serverSelectionTimeoutMS=5000
         )
-        mongodb.database = mongodb.client.get_database(os.getenv("DATABASE_NAME", "pos_db"))
+        mongodb.database = mongodb.client.get_database(os.getenv("DATABASE_NAME", "pos"))
         
         # Test the connection
         await mongodb.client.admin.command('ping')
