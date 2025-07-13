@@ -624,7 +624,11 @@ class _HomeScreenState extends State<HomeScreen>
     _performanceService.startOperation('HomeScreen.build');
 
     final widget = Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        toolbarHeight: 0, // Hide the app bar visually
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _forceRefresh,
@@ -640,22 +644,23 @@ class _HomeScreenState extends State<HomeScreen>
                   )
                   : SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         // Header
                         _buildHeader(),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 16),
                         // Today's Report
                         _buildTodayReport(),
-                        const SizedBox(height: 22),
+                        const SizedBox(height: 24),
                         // Quick Actions
                         _buildQuickActions(),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 20),
                         // Recent Orders and Estimates
                         _buildRecentOrders(),
+                        const SizedBox(height: 20), // Bottom padding
                       ],
                     ),
                   ),
@@ -716,74 +721,7 @@ class _HomeScreenState extends State<HomeScreen>
               ],
             ),
           ),
-          // Status indicator and refresh button
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Refresh button
-              GestureDetector(
-                onTap: _forceRefresh,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6B8E7F).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    _isRefreshing ? Icons.hourglass_empty : Icons.refresh,
-                    color: const Color(0xFF6B8E7F),
-                    size: 16,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Connection status
-              GestureDetector(
-                onTap: _showConnectionStatus,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color:
-                        _isConnected
-                            ? const Color(0xFF4CAF50).withOpacity(0.2)
-                            : const Color(0xFFFF5722).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color:
-                              _isConnected
-                                  ? const Color(0xFF4CAF50)
-                                  : const Color(0xFFFF5722),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _isConnected ? 'Online' : 'Offline',
-                        style: TextStyle(
-                          color:
-                              _isConnected
-                                  ? const Color(0xFF4CAF50)
-                                  : const Color(0xFFFF5722),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+          // Removed empty Row for better alignment
         ],
       ),
     );
@@ -832,14 +770,17 @@ class _HomeScreenState extends State<HomeScreen>
               Row(
                 children: [
                   Expanded(
-                    child: _buildSummaryCard(
-                      'Total Sales',
-                      'Rs. ${_totalSales.toStringAsFixed(0)}',
-                      Icons.attach_money,
-                      const Color(0xFF6B8E7F),
+                    child: GestureDetector(
+                      onTap: () => _showPaymentBreakdownDialog(),
+                      child: _buildSummaryCard(
+                        'Total Sales',
+                        'Rs. ${_totalSales.toStringAsFixed(0)}',
+                        Icons.attach_money,
+                        const Color(0xFF6B8E7F),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: _buildSummaryCard(
                       'Orders',
@@ -850,7 +791,7 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
@@ -861,7 +802,7 @@ class _HomeScreenState extends State<HomeScreen>
                       const Color(0xFFFF9800),
                     ),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: _buildSummaryCard(
                       'Completed',
@@ -872,9 +813,6 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
-              // Payment Mode Breakdown
-              _buildPaymentBreakdown(),
             ],
           ),
         ],
@@ -937,101 +875,6 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildPaymentBreakdown() {
-    // Get payment breakdown from orders
-    final paymentBreakdown = _getPaymentBreakdown();
-
-    if (paymentBreakdown.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0D0D0D),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFF3A3A3A)),
-        ),
-        child: const Center(
-          child: Text(
-            'No payment data available',
-            style: TextStyle(color: Colors.grey, fontSize: 12),
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.payment, color: Color(0xFF4CAF50), size: 14),
-            const SizedBox(width: 6),
-            Text(
-              'Payment Breakdown',
-              style: TextStyle(
-                color: Colors.grey[400],
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children:
-              paymentBreakdown.entries.map((entry) {
-                final mode = entry.key;
-                final data = entry.value;
-                final count = data['count'] as int;
-                final amount = data['amount'] as double;
-
-                if (count == 0) return const SizedBox.shrink();
-
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _getPaymentModeColor(mode),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _getPaymentModeDisplayName(mode),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        'Rs. ${amount.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        '$count orders',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 9,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-        ),
-      ],
     );
   }
 
@@ -1112,6 +955,163 @@ class _HomeScreenState extends State<HomeScreen>
       default:
         return const Color(0xFF757575);
     }
+  }
+
+  void _showPaymentBreakdownDialog() {
+    final paymentBreakdown = _getPaymentBreakdown();
+    // Calculate total from payment breakdown to ensure accuracy
+    final totalAmount = paymentBreakdown.values.fold<double>(
+      0.0,
+      (sum, data) => sum + (data['amount'] as double),
+    );
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          title: Row(
+            children: [
+              const Icon(Icons.payment, color: Color(0xFF4CAF50), size: 24),
+              const SizedBox(width: 8),
+              const Text(
+                'Payment Breakdown',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Total Sales row (improved)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.attach_money,
+                      color: Color(0xFF6B8E7F),
+                      size: 26,
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Total Sales',
+                          style: TextStyle(
+                            color: Color(0xFFB0B0B0),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Rs. ${totalAmount.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                const Divider(color: Color(0xFF232526), thickness: 1),
+                const SizedBox(height: 10),
+                if (paymentBreakdown.isNotEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Payment Modes',
+                      style: TextStyle(
+                        color: Color(0xFFB0B0B0),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                if (paymentBreakdown.isEmpty)
+                  const Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.grey, size: 32),
+                        SizedBox(height: 8),
+                        Text(
+                          'No payment data available',
+                          style: TextStyle(color: Colors.grey, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children:
+                        paymentBreakdown.entries.map((entry) {
+                          final mode = entry.key;
+                          final data = entry.value;
+                          final count = data['count'] as int;
+                          final amount = data['amount'] as double;
+                          if (count == 0) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 4,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: _getPaymentModeColor(mode),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  _getPaymentModeDisplayName(mode),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  'Rs. ${amount.toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Close',
+                style: TextStyle(color: Color(0xFF6B8E7F)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Widget _buildQuickActionCard(
