@@ -262,7 +262,7 @@ async def get_order_by_number(sale_number: str):
         )
 
 @router.put("/{order_id}/status")
-async def update_order_status(order_id: str, status: str):
+async def update_order_status(order_id: str, new_status: str):
     """Update order status"""
     try:
         db = get_database()
@@ -271,7 +271,7 @@ async def update_order_status(order_id: str, status: str):
         # Update the order status
         result = await orders_collection.update_one(
             {"order_id": order_id},
-            {"$set": {"status": status}}
+            {"$set": {"status": new_status}}
         )
         
         if result.modified_count > 0:
@@ -280,8 +280,8 @@ async def update_order_status(order_id: str, status: str):
             
             return {
                 "success": True,
-                "message": f"Order status updated to {status}",
-                "status": status
+                "message": f"Order status updated to {new_status}",
+                "status": new_status
             }
         else:
             raise HTTPException(

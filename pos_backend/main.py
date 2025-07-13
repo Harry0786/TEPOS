@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from routers import estimate_route, orders_route_new, sms_route
 from database.database import connect_to_mongo, close_mongo_connection
@@ -49,6 +50,16 @@ async def root():
 @app.get("/api/")
 async def api_root():
     return {"message": "POS API is running"}
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "service": "TEPOS Backend API",
+        "version": "1.0.0"
+    }
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
