@@ -1,10 +1,60 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 
+// Structured WebSocket message types
+class WebSocketMessage {
+  final String type;
+  final String action;
+  final String id;
+  final Map<String, dynamic>? data;
+  final String? orderId;
+  final String? orderNumber;
+
+  WebSocketMessage({
+    required this.type,
+    required this.action,
+    required this.id,
+    this.data,
+    this.orderId,
+    this.orderNumber,
+  });
+
+  factory WebSocketMessage.fromJson(Map<String, dynamic> json) {
+    return WebSocketMessage(
+      type: json['type'] ?? '',
+      action: json['action'] ?? '',
+      id: json['id'] ?? '',
+      data: json['data'],
+      orderId: json['order_id'],
+      orderNumber: json['order_number'],
+    );
+  }
+
+  factory WebSocketMessage.fromString(String message) {
+    try {
+      final json = jsonDecode(message);
+      return WebSocketMessage.fromJson(json);
+    } catch (e) {
+      // Fallback for legacy string messages
+      return WebSocketMessage(type: 'legacy', action: message, id: '');
+    }
+  }
+
+  bool get isLegacy => type == 'legacy';
+  bool get isEstimate => type == 'estimate';
+  bool get isOrder => type == 'order';
+  bool get isCreate => action == 'create';
+  bool get isUpdate => action == 'update';
+  bool get isDelete => action == 'delete';
+  bool get isConvertToOrder => action == 'convert_to_order';
+}
+
 class WebSocketService {
   WebSocketChannel? _channel;
-  StreamController<String>? _messageController;
+  StreamController<WebSocketMessage>? _messageController;
+  StreamController<String>? _legacyMessageController;
   bool _isConnected = false;
   Timer? _reconnectTimer;
   Timer? _debounceTimer;
@@ -19,9 +69,16 @@ class WebSocketService {
 
   bool get isConnected => _isConnected;
 
-  Stream<String> get messageStream {
-    _messageController ??= StreamController<String>.broadcast();
+  // Stream for structured messages
+  Stream<WebSocketMessage> get messageStream {
+    _messageController ??= StreamController<WebSocketMessage>.broadcast();
     return _messageController!.stream;
+  }
+
+  // Stream for legacy string messages (backward compatibility)
+  Stream<String> get legacyMessageStream {
+    _legacyMessageController ??= StreamController<String>.broadcast();
+    return _legacyMessageController!.stream;
   }
 
   void connect() {
@@ -76,9 +133,20 @@ class WebSocketService {
     // Debounce the message emission
     _debounceTimer = Timer(_debounceDelay, () {
       try {
-        _messageController?.add(message);
+        // Try to parse as structured message
+        final wsMessage = WebSocketMessage.fromString(message);
+
+        if (wsMessage.isLegacy) {
+          // Handle legacy string messages
+          _legacyMessageController?.add(message);
+        } else {
+          // Handle structured messages
+          _messageController?.add(wsMessage);
+        }
       } catch (e) {
-        print('❌ Error emitting WebSocket message: $e');
+        print('❌ Error parsing WebSocket message: $e');
+        // Fallback to legacy handling
+        _legacyMessageController?.add(message);
       }
     });
   }
@@ -106,5 +174,6 @@ class WebSocketService {
   void dispose() {
     disconnect();
     _messageController?.close();
+    _legacyMessageController?.close();
   }
 }

@@ -112,8 +112,19 @@ def create_completed_sale(order_data: OrderCreate):
             print(f"✅ Order created successfully: {order_dict['order_id']}")
             # Notify all WebSocket clients of the update
             try:
-                # WebSocket notification is still async, so use create_task if running in an event loop
-                pass
+                import asyncio
+                asyncio.create_task(websocket_manager.broadcast_update({
+                    "type": "order",
+                    "action": "create",
+                    "id": order_dict["order_id"],
+                    "data": {
+                        "order_id": order_dict["order_id"],
+                        "sale_number": order_dict["sale_number"],
+                        "customer_name": order_dict["customer_name"],
+                        "total": order_dict["total"],
+                        "created_at": order_dict["created_at"].isoformat()
+                    }
+                }))
             except Exception as ws_error:
                 print(f"⚠️ WebSocket notification failed: {ws_error}")
                 # Continue even if WebSocket fails
@@ -423,8 +434,15 @@ def delete_order(order_id: str):
                     # Continue even if estimate deletion fails
             
             # Notify all WebSocket clients of the update
-            # WebSocket notification is still async, so use create_task if running in an event loop
-            pass
+            try:
+                import asyncio
+                asyncio.create_task(websocket_manager.broadcast_update({
+                    "type": "order",
+                    "action": "delete",
+                    "id": order_id
+                }))
+            except Exception as ws_error:
+                print(f"⚠️ WebSocket notification failed: {ws_error}")
             
             return {
                 "success": True,

@@ -24,7 +24,16 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
     super.initState();
     _webSocketService = WebSocketService(serverUrl: ApiService.webSocketUrl);
     _webSocketService.connect();
+
+    // Handle structured WebSocket messages for efficient updates
     _webSocketService.messageStream.listen((message) {
+      if (mounted) {
+        _handleWebSocketMessage(message);
+      }
+    });
+
+    // Handle legacy messages for backward compatibility
+    _webSocketService.legacyMessageStream.listen((message) {
       if (message == 'order_updated' ||
           message == 'estimate_updated' ||
           message == 'sale_completed' ||
@@ -33,14 +42,111 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
           message == 'estimate_converted_to_order') {
         if (mounted) {
           print(
-            '🔄 WebSocket message received: $message - refreshing orders...',
+            '🔄 Legacy WebSocket message received: $message - refreshing orders...',
           );
-          // Clear cache to ensure fresh data
           ApiService.clearCache();
           _loadOrders();
         }
       }
     });
+
+    _loadOrders();
+  }
+
+  void _handleWebSocketMessage(WebSocketMessage message) {
+    print(
+      '📨 Handling WebSocket message: ${message.type} - ${message.action} - ${message.id}',
+    );
+
+    if (message.isOrder) {
+      switch (message.action) {
+        case 'create':
+          _handleOrderCreated(message);
+          break;
+        case 'delete':
+          _handleOrderDeleted(message);
+          break;
+        case 'update':
+          _handleOrderUpdated(message);
+          break;
+        default:
+          // Unknown action, do full refresh
+          print(
+            '⚠️ Unknown order action: ${message.action} - doing full refresh',
+          );
+          ApiService.clearCache();
+          _loadOrders();
+      }
+    } else if (message.isEstimate && message.isConvertToOrder) {
+      // Estimate converted to order - refresh orders to show the new order
+      print('🔄 Estimate converted to order - refreshing orders...');
+      ApiService.clearCache();
+      _loadOrders();
+    } else {
+      // Unknown message type, do full refresh
+      print('⚠️ Unknown message type: ${message.type} - doing full refresh');
+      ApiService.clearCache();
+      _loadOrders();
+    }
+  }
+
+  void _handleOrderCreated(WebSocketMessage message) {
+    print('➕ Handling order created: ${message.id}');
+    if (message.data != null) {
+      // Add the new order to the list
+      final newOrder = {
+        'id': message.id,
+        'order_id': message.data!['order_id'],
+        'sale_number': message.data!['sale_number'],
+        'customer_name': message.data!['customer_name'],
+        'total': message.data!['total'],
+        'created_at': message.data!['created_at'],
+        'status': 'Completed',
+        // Add other required fields with defaults
+        'customer_phone': '',
+        'customer_address': '',
+        'sale_by': '',
+        'items': [],
+        'subtotal': 0.0,
+        'discount_amount': 0.0,
+        'is_percentage_discount': false,
+        'payment_mode': 'Cash',
+      };
+
+      setState(() {
+        _orders.insert(0, newOrder);
+        _filteredOrders = _orders;
+      });
+
+      print('✅ Order added to list: ${message.data!['sale_number']}');
+    } else {
+      // No data provided, do full refresh
+      print('⚠️ No data in create message - doing full refresh');
+      ApiService.clearCache();
+      _loadOrders();
+    }
+  }
+
+  void _handleOrderDeleted(WebSocketMessage message) {
+    print('🗑️ Handling order deleted: ${message.id}');
+
+    setState(() {
+      _orders.removeWhere(
+        (order) => order['order_id'] == message.id || order['id'] == message.id,
+      );
+      _filteredOrders = _orders;
+    });
+
+    print('✅ Order removed from list: ${message.id}');
+  }
+
+  void _handleOrderUpdated(WebSocketMessage message) {
+    print('✏️ Handling order updated: ${message.id}');
+
+    // For updates, we need to refresh the specific order or do a full refresh
+    // Since we don't have the updated data, do a full refresh for now
+    print('🔄 Order updated - doing full refresh');
+    ApiService.clearCache();
     _loadOrders();
   }
 

@@ -24,7 +24,16 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
     super.initState();
     _webSocketService = WebSocketService(serverUrl: ApiService.webSocketUrl);
     _webSocketService.connect();
+
+    // Handle structured WebSocket messages for efficient updates
     _webSocketService.messageStream.listen((message) {
+      if (mounted) {
+        _handleWebSocketMessage(message);
+      }
+    });
+
+    // Handle legacy messages for backward compatibility
+    _webSocketService.legacyMessageStream.listen((message) {
       if (message == 'estimate_updated' ||
           message == 'order_updated' ||
           message == 'sale_completed' ||
@@ -33,15 +42,131 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
           message == 'estimate_converted_to_order') {
         if (mounted) {
           print(
-            '🔄 WebSocket message received: $message - refreshing estimates...',
+            '🔄 Legacy WebSocket message received: $message - refreshing estimates...',
           );
-          // Clear cache to ensure fresh data
           ApiService.clearCache();
           _fetchEstimates();
         }
       }
     });
+
     _fetchEstimates();
+  }
+
+  void _handleWebSocketMessage(WebSocketMessage message) {
+    print(
+      '📨 Handling WebSocket message: ${message.type} - ${message.action} - ${message.id}',
+    );
+
+    if (message.isEstimate) {
+      switch (message.action) {
+        case 'create':
+          _handleEstimateCreated(message);
+          break;
+        case 'delete':
+          _handleEstimateDeleted(message);
+          break;
+        case 'convert_to_order':
+          _handleEstimateConvertedToOrder(message);
+          break;
+        default:
+          // Unknown action, do full refresh
+          print(
+            '⚠️ Unknown estimate action: ${message.action} - doing full refresh',
+          );
+          ApiService.clearCache();
+          _fetchEstimates();
+      }
+    } else if (message.isOrder) {
+      // Order changes might affect estimates (e.g., if order was created from estimate)
+      print('🔄 Order change detected - refreshing estimates...');
+      ApiService.clearCache();
+      _fetchEstimates();
+    } else {
+      // Unknown message type, do full refresh
+      print('⚠️ Unknown message type: ${message.type} - doing full refresh');
+      ApiService.clearCache();
+      _fetchEstimates();
+    }
+  }
+
+  void _handleEstimateCreated(WebSocketMessage message) {
+    print('➕ Handling estimate created: ${message.id}');
+    if (message.data != null) {
+      // Add the new estimate to the list
+      final newEstimate = {
+        'id': message.id,
+        'estimate_id': message.data!['estimate_id'],
+        'estimate_number': message.data!['estimate_number'],
+        'customer_name': message.data!['customer_name'],
+        'total': message.data!['total'],
+        'created_at': message.data!['created_at'],
+        'is_converted_to_order': false,
+        // Add other required fields with defaults
+        'customer_phone': '',
+        'customer_address': '',
+        'sale_by': '',
+        'items': [],
+        'subtotal': 0.0,
+        'discount_amount': 0.0,
+        'is_percentage_discount': false,
+        'status': 'Pending',
+      };
+
+      setState(() {
+        _estimates.insert(0, newEstimate);
+        _filteredEstimates = _applyFilter(_estimates);
+      });
+
+      print('✅ Estimate added to list: ${message.data!['estimate_number']}');
+    } else {
+      // No data provided, do full refresh
+      print('⚠️ No data in create message - doing full refresh');
+      ApiService.clearCache();
+      _fetchEstimates();
+    }
+  }
+
+  void _handleEstimateDeleted(WebSocketMessage message) {
+    print('🗑️ Handling estimate deleted: ${message.id}');
+
+    setState(() {
+      _estimates.removeWhere(
+        (estimate) =>
+            estimate['estimate_id'] == message.id ||
+            estimate['id'] == message.id,
+      );
+      _filteredEstimates = _applyFilter(_estimates);
+    });
+
+    print('✅ Estimate removed from list: ${message.id}');
+  }
+
+  void _handleEstimateConvertedToOrder(WebSocketMessage message) {
+    print('🔄 Handling estimate converted to order: ${message.id}');
+
+    // Remove the estimate from the list since it's now an order
+    setState(() {
+      _estimates.removeWhere(
+        (estimate) =>
+            estimate['estimate_id'] == message.id ||
+            estimate['id'] == message.id,
+      );
+      _filteredEstimates = _applyFilter(_estimates);
+    });
+
+    print('✅ Estimate converted to order and removed from list: ${message.id}');
+
+    // Show success message
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Estimate converted to order successfully!'),
+          backgroundColor: const Color(0xFF6B8E7F),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Future<void> _fetchEstimates() async {
@@ -856,7 +981,9 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                                 estimateId:
                                     estimate['estimate_id'] ?? estimate['id'],
                               ).timeout(
-                                const Duration(seconds: 10), // Shorter timeout for deletion
+                                const Duration(
+                                  seconds: 10,
+                                ), // Shorter timeout for deletion
                                 onTimeout: () {
                                   throw Exception('Delete operation timed out');
                                 },
