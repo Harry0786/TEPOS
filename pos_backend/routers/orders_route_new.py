@@ -367,4 +367,57 @@ async def update_order_status(order_id: str, new_status: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error updating order status: {str(e)}"
+        )
+
+@router.delete("/{order_id}")
+async def delete_order(order_id: str):
+    """Delete an order and its linked estimate if it was created from an estimate"""
+    try:
+        db = get_database()
+        orders_collection = db.orders
+        estimates_collection = db.estimates
+        
+        # Check if order exists
+        order = await orders_collection.find_one({"order_id": order_id})
+        if not order:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Order not found"
+            )
+        
+        # Check if order was created from an estimate
+        source_estimate_id = order.get("source_estimate_id")
+        
+        # Delete the order
+        result = await orders_collection.delete_one({"order_id": order_id})
+        
+        if result.deleted_count > 0:
+            # If order was created from an estimate, also delete the estimate
+            if source_estimate_id:
+                try:
+                    await estimates_collection.delete_one({"estimate_id": source_estimate_id})
+                    print(f"Deleted linked estimate: {source_estimate_id}")
+                except Exception as e:
+                    print(f"Warning: Failed to delete linked estimate {source_estimate_id}: {e}")
+                    # Continue even if estimate deletion fails
+            
+            # Notify all WebSocket clients of the update
+            asyncio.create_task(websocket_manager.broadcast_update("order_deleted"))
+            
+            return {
+                "success": True,
+                "message": "Order deleted successfully" + (" (linked estimate also deleted)" if source_estimate_id else "")
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete order"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error deleting order: {str(e)}"
         ) 

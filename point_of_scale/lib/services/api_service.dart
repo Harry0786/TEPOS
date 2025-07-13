@@ -232,8 +232,15 @@ class ApiService {
   }
 
   // Fetch all estimates from backend with caching
-  static Future<List<Map<String, dynamic>>> fetchEstimates() async {
+  static Future<List<Map<String, dynamic>>> fetchEstimates({
+    bool forceClearCache = false,
+  }) async {
     const cacheKey = 'estimates';
+
+    if (forceClearCache) {
+      print('🧹 Forcing cache clear for estimates');
+      _clearCache();
+    }
 
     // Check cache first
     if (_isCacheValid(cacheKey)) {
@@ -242,8 +249,12 @@ class ApiService {
     }
 
     return _retryRequest(() async {
+      print('🌐 Fetching estimates from: $baseUrl/estimates/all');
       final url = Uri.parse('$baseUrl/estimates/all');
       final response = await http.get(url).timeout(const Duration(seconds: 20));
+
+      print('📡 Response status: ${response.statusCode}');
+      print('📡 Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -251,16 +262,25 @@ class ApiService {
 
         if (data is List) {
           estimates = List<Map<String, dynamic>>.from(data);
+          print('📋 Parsed estimates as List: ${estimates.length} items');
         } else if (data['estimates'] != null) {
           estimates = List<Map<String, dynamic>>.from(data['estimates']);
+          print(
+            '📋 Parsed estimates from data.estimates: ${estimates.length} items',
+          );
+        } else {
+          print('⚠️ No estimates found in response data: $data');
         }
 
         // Cache the result
         _cache[cacheKey] = {'data': estimates, 'timestamp': DateTime.now()};
+        print('💾 Cached ${estimates.length} estimates');
 
         return estimates;
+      } else {
+        print('❌ HTTP Error: ${response.statusCode} - ${response.body}');
+        return [];
       }
-      return [];
     });
   }
 
@@ -555,57 +575,67 @@ class ApiService {
     }
   }
 
-  static Future<bool> deleteEstimate(String estimateId) async {
-    try {
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-
-      final response = await http.delete(
-        Uri.parse('$baseUrl/estimates/$estimateId'),
-        headers: headers,
+  // Convert estimate to order
+  static Future<Map<String, dynamic>> convertEstimateToOrder({
+    required String estimateId,
+    String paymentMode = "Cash",
+  }) async {
+    return _retryRequest(() async {
+      final url = Uri.parse(
+        '$baseUrl/estimates/$estimateId/convert-to-order?payment_mode=$paymentMode',
       );
-
-      if (response.statusCode == 200) {
-        return true;
+      print('🌐 Converting estimate to order: $url');
+      final response = await http
+          .post(url)
+          .timeout(const Duration(seconds: 20));
+      print('📡 Response status:  ${response.statusCode}');
+      print('📡 Response body: ${response.body}');
+      final data = json.decode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        _clearCache();
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Estimate converted to order!',
+          'data': data['data'] ?? {},
+          'order_id': data['order_id'] ?? '',
+          'sale_number': data['sale_number'] ?? '',
+        };
       } else {
-        print('❌ Error deleting estimate: ${response.statusCode}');
-        return false;
+        return {
+          'success': false,
+          'message':
+              data['detail'] ?? data['message'] ?? 'Failed to convert estimate',
+          'error': 'Server returned status ${response.statusCode}',
+        };
       }
-    } catch (e) {
-      print('❌ Exception deleting estimate: $e');
-      return false;
-    }
+    });
   }
 
-  static Future<Map<String, dynamic>?> convertEstimateToOrder(
-    String estimateId,
-    String paymentMode,
-  ) async {
-    try {
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-
-      final response = await http.post(
-        Uri.parse(
-          '$baseUrl/estimates/$estimateId/convert-to-order?payment_mode=$paymentMode',
-        ),
-        headers: headers,
-      );
-
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+  // Delete estimate
+  static Future<Map<String, dynamic>> deleteEstimate({
+    required String estimateId,
+  }) async {
+    return _retryRequest(() async {
+      final url = Uri.parse('$baseUrl/estimates/$estimateId');
+      print('🗑️ Deleting estimate: $url');
+      final response = await http
+          .delete(url)
+          .timeout(const Duration(seconds: 20));
+      print('📡 Response status: ${response.statusCode}');
+      print('📡 Response body: ${response.body}');
+      final data = json.decode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        _clearCache();
+        return {'success': true, 'message': 'Estimate deleted successfully!'};
       } else {
-        print('❌ Error converting estimate to order: ${response.statusCode}');
-        return null;
+        return {
+          'success': false,
+          'message':
+              data['detail'] ?? data['message'] ?? 'Failed to delete estimate',
+          'error': 'Server returned status ${response.statusCode}',
+        };
       }
-    } catch (e) {
-      print('❌ Exception converting estimate to order: $e');
-      return null;
-    }
+    });
   }
 
   // Customer Management API Methods
