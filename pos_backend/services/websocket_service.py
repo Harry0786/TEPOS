@@ -1,5 +1,6 @@
 from fastapi import WebSocket, WebSocketDisconnect
 import asyncio
+import json
 
 class WebSocketManager:
     def __init__(self):
@@ -13,9 +14,16 @@ class WebSocketManager:
         if websocket in self.connected_clients:
             self.connected_clients.remove(websocket)
 
-    async def broadcast_update(self, message: str):
-        """Broadcast a message to all connected clients"""
+    async def broadcast_update(self, message):
+        """Broadcast a message (string or dict) to all connected clients as JSON string"""
+        import json
         to_remove = []
+        if not isinstance(message, str):
+            try:
+                message = json.dumps(message)
+            except Exception as e:
+                print(f"Error serializing broadcast message: {e}")
+                return
         for ws in self.connected_clients:
             try:
                 await ws.send_text(message)

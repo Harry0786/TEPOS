@@ -27,8 +27,16 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
     _webSocketService.messageStream.listen((message) {
       if (message == 'order_updated' ||
           message == 'estimate_updated' ||
-          message == 'sale_completed') {
+          message == 'sale_completed' ||
+          message == 'estimate_created' ||
+          message == 'estimate_deleted' ||
+          message == 'estimate_converted_to_order') {
         if (mounted) {
+          print(
+            '🔄 WebSocket message received: $message - refreshing orders...',
+          );
+          // Clear cache to ensure fresh data
+          ApiService.clearCache();
           _loadOrders();
         }
       }
@@ -40,7 +48,7 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
     setState(() {
       _isLoading = true;
     });
-    final orders = await ApiService.fetchOrders();
+    final orders = await ApiService.fetchOrders(forceClearCache: true);
     setState(() {
       _orders = orders; // Show only actual orders (completed sales)
       _filteredOrders = _orders;

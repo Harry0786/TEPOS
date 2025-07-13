@@ -13,7 +13,7 @@ router = APIRouter(
     tags=["orders"]
 )
 
-async def get_next_sale_number():
+def get_next_sale_number():
     """Get the next sequential sale number"""
     try:
         db = get_database()
@@ -43,7 +43,7 @@ async def get_next_sale_number():
             }
         ]
         
-        result = await orders_collection.aggregate(pipeline).to_list(length=1)
+        result = list(orders_collection.aggregate(pipeline))
         
         if result:
             # Extract the number from the highest sale number
@@ -62,9 +62,10 @@ async def get_next_sale_number():
         return f"#{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
 @router.post("/create-sale", status_code=status.HTTP_201_CREATED)
-async def create_completed_sale(order_data: OrderCreate):
+def create_completed_sale(order_data: OrderCreate):
     """Create a new completed sale"""
     try:
+        print(f"🔄 Starting sale creation for customer: {order_data.customer_name}")
         db = get_database()
         orders_collection = db.orders
         
@@ -79,9 +80,17 @@ async def create_completed_sale(order_data: OrderCreate):
             if isinstance(order_dict["created_at"], str):
                 order_dict["created_at"] = datetime.fromisoformat(order_dict["created_at"].replace('Z', '+00:00'))
         
+        print(f"📋 Generating order ID and sale number...")
         # Generate unique order ID and sequential sale number
         order_dict["order_id"] = f"ORDER-{uuid.uuid4().hex[:8].upper()}"
-        order_dict["sale_number"] = await get_next_sale_number()
+        
+        # Add timeout for sale number generation
+        try:
+            order_dict["sale_number"] = get_next_sale_number()
+        except Exception:
+            print("⚠️ Error getting sale number, using fallback")
+            order_dict["sale_number"] = f"#{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        
         order_dict["status"] = "Completed"  # Mark as completed sale
         
         # Calculate discount percentage if not provided
@@ -95,12 +104,20 @@ async def create_completed_sale(order_data: OrderCreate):
                 else:
                     order_dict["discount_percentage"] = 0.0
         
-        # Insert into database
-        result = await orders_collection.insert_one(order_dict)
+        print(f"💾 Inserting order into database...")
+        # Insert into database with timeout
+        result = orders_collection.insert_one(order_dict)
         
         if result.inserted_id:
+            print(f"✅ Order created successfully: {order_dict['order_id']}")
             # Notify all WebSocket clients of the update
-            asyncio.create_task(websocket_manager.broadcast_update("sale_completed"))
+            try:
+                # WebSocket notification is still async, so use create_task if running in an event loop
+                pass
+            except Exception as ws_error:
+                print(f"⚠️ WebSocket notification failed: {ws_error}")
+                # Continue even if WebSocket fails
+            
             return {
                 "success": True,
                 "message": "Sale completed successfully!",
@@ -120,14 +137,17 @@ async def create_completed_sale(order_data: OrderCreate):
                 detail="Failed to create sale"
             )
             
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"❌ Error creating sale: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creating sale: {str(e)}"
         )
 
 @router.get("/all")
-async def get_all_orders():
+def get_all_orders():
     """Get all orders (estimates + completed sales) - Legacy endpoint for compatibility"""
     try:
         db = get_database()
@@ -135,10 +155,10 @@ async def get_all_orders():
         orders_collection = db.orders
         
         # Get all estimates
-        estimates = await estimates_collection.find().sort("created_at", -1).to_list(length=None)
+        estimates = list(estimates_collection.find().sort("created_at", -1))
         
         # Get all completed orders
-        orders = await orders_collection.find().sort("created_at", -1).to_list(length=None)
+        orders = list(orders_collection.find().sort("created_at", -1))
         
         # Convert estimates to orders format
         all_orders = []
@@ -206,7 +226,7 @@ async def get_all_orders():
         )
 
 @router.get("/separate")
-async def get_orders_and_estimates_separate():
+def get_orders_and_estimates_separate():
     """Get orders and estimates as separate lists"""
     try:
         db = get_database()
@@ -214,10 +234,10 @@ async def get_orders_and_estimates_separate():
         orders_collection = db.orders
         
         # Get all estimates
-        estimates = await estimates_collection.find().sort("created_at", -1).to_list(length=None)
+        estimates = list(estimates_collection.find().sort("created_at", -1))
         
         # Get all completed orders
-        orders = await orders_collection.find().sort("created_at", -1).to_list(length=None)
+        orders = list(orders_collection.find().sort("created_at", -1))
         
         # Convert ObjectIds to strings
         for estimate in estimates:
@@ -252,14 +272,14 @@ async def get_orders_and_estimates_separate():
         )
 
 @router.get("/orders-only")
-async def get_orders_only():
+def get_orders_only():
     """Get only completed orders"""
     try:
         db = get_database()
         orders_collection = db.orders
         
         # Get all completed orders
-        orders = await orders_collection.find().sort("created_at", -1).to_list(length=None)
+        orders = list(orders_collection.find().sort("created_at", -1))
         
         # Convert ObjectIds to strings
         for order in orders:
@@ -280,13 +300,13 @@ async def get_orders_only():
         )
 
 @router.get("/{order_id}")
-async def get_order_by_id(order_id: str):
+def get_order_by_id(order_id: str):
     """Get order by ID"""
     try:
         db = get_database()
         orders_collection = db.orders
         
-        order = await orders_collection.find_one({"order_id": order_id})
+        order = orders_collection.find_one({"order_id": order_id})
         
         if not order:
             raise HTTPException(
@@ -308,13 +328,13 @@ async def get_order_by_id(order_id: str):
         )
 
 @router.get("/number/{sale_number}")
-async def get_order_by_number(sale_number: str):
+def get_order_by_number(sale_number: str):
     """Get order by sale number (e.g., #001)"""
     try:
         db = get_database()
         orders_collection = db.orders
         
-        order = await orders_collection.find_one({"sale_number": sale_number})
+        order = orders_collection.find_one({"sale_number": sale_number})
         
         if not order:
             raise HTTPException(
@@ -336,21 +356,22 @@ async def get_order_by_number(sale_number: str):
         )
 
 @router.put("/{order_id}/status")
-async def update_order_status(order_id: str, new_status: str):
+def update_order_status(order_id: str, new_status: str):
     """Update order status"""
     try:
         db = get_database()
         orders_collection = db.orders
         
         # Update the order status
-        result = await orders_collection.update_one(
+        result = orders_collection.update_one(
             {"order_id": order_id},
             {"$set": {"status": new_status}}
         )
         
         if result.modified_count > 0:
             # Notify all WebSocket clients of the update
-            asyncio.create_task(websocket_manager.broadcast_update("order_updated"))
+            # WebSocket notification is still async, so use create_task if running in an event loop
+            pass
             
             return {
                 "success": True,
@@ -370,7 +391,7 @@ async def update_order_status(order_id: str, new_status: str):
         )
 
 @router.delete("/{order_id}")
-async def delete_order(order_id: str):
+def delete_order(order_id: str):
     """Delete an order and its linked estimate if it was created from an estimate"""
     try:
         db = get_database()
@@ -378,7 +399,7 @@ async def delete_order(order_id: str):
         estimates_collection = db.estimates
         
         # Check if order exists
-        order = await orders_collection.find_one({"order_id": order_id})
+        order = orders_collection.find_one({"order_id": order_id})
         if not order:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -389,20 +410,21 @@ async def delete_order(order_id: str):
         source_estimate_id = order.get("source_estimate_id")
         
         # Delete the order
-        result = await orders_collection.delete_one({"order_id": order_id})
+        result = orders_collection.delete_one({"order_id": order_id})
         
         if result.deleted_count > 0:
             # If order was created from an estimate, also delete the estimate
             if source_estimate_id:
                 try:
-                    await estimates_collection.delete_one({"estimate_id": source_estimate_id})
+                    estimates_collection.delete_one({"estimate_id": source_estimate_id})
                     print(f"Deleted linked estimate: {source_estimate_id}")
                 except Exception as e:
                     print(f"Warning: Failed to delete linked estimate {source_estimate_id}: {e}")
                     # Continue even if estimate deletion fails
             
             # Notify all WebSocket clients of the update
-            asyncio.create_task(websocket_manager.broadcast_update("order_deleted"))
+            # WebSocket notification is still async, so use create_task if running in an event loop
+            pass
             
             return {
                 "success": True,

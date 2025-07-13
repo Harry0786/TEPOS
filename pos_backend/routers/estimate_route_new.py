@@ -13,7 +13,7 @@ router = APIRouter(
     tags=["estimates"]
 )
 
-async def get_next_estimate_number():
+def get_next_estimate_number():
     """Get the next sequential estimate number"""
     try:
         db = get_database()
@@ -43,7 +43,7 @@ async def get_next_estimate_number():
             }
         ]
         
-        result = await estimates_collection.aggregate(pipeline).to_list(length=1)  # type: ignore
+        result = list(estimates_collection.aggregate(pipeline))  # type: ignore
         
         if result:
             # Extract the number from the highest estimate number
@@ -62,7 +62,7 @@ async def get_next_estimate_number():
         return f"#{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
 @router.post("/create", status_code=status.HTTP_201_CREATED)
-async def create_estimate(estimate_data: EstimateCreate):
+def create_estimate(estimate_data: EstimateCreate):
     """Create a new estimate"""
     try:
         db = get_database()
@@ -81,7 +81,7 @@ async def create_estimate(estimate_data: EstimateCreate):
         
         # Generate unique estimate ID and sequential estimate number
         estimate_dict["estimate_id"] = f"EST-{uuid.uuid4().hex[:8].upper()}"
-        estimate_dict["estimate_number"] = await get_next_estimate_number()
+        estimate_dict["estimate_number"] = get_next_estimate_number()
         
         # Initialize conversion tracking fields
         estimate_dict["is_converted_to_order"] = False
@@ -100,11 +100,22 @@ async def create_estimate(estimate_data: EstimateCreate):
                     estimate_dict["discount_percentage"] = 0.0
         
         # Insert into database
-        result = await estimates_collection.insert_one(estimate_dict)  # type: ignore
+        result = estimates_collection.insert_one(estimate_dict)
         
         if result.inserted_id:
             # Notify all WebSocket clients of the update
-            asyncio.create_task(websocket_manager.broadcast_update("estimate_created"))
+            asyncio.create_task(websocket_manager.broadcast_update({
+                "type": "estimate",
+                "action": "create",
+                "id": estimate_dict["estimate_id"],
+                "data": {
+                    "estimate_id": estimate_dict["estimate_id"],
+                    "estimate_number": estimate_dict["estimate_number"],
+                    "customer_name": estimate_dict["customer_name"],
+                    "total": estimate_dict["total"],
+                    "created_at": estimate_dict["created_at"].isoformat()
+                }
+            }))
             return {
                 "success": True,
                 "message": "Estimate created successfully!",
@@ -233,33 +244,34 @@ async def get_estimate_by_id(estimate_id: str):
         )
 
 @router.delete("/{estimate_id}")
-async def delete_estimate(estimate_id: str):
+def delete_estimate(estimate_id: str):
     """Delete an estimate"""
     try:
+        print(f"🗑️ Starting estimate deletion: {estimate_id}")
         db = get_database()
         estimates_collection = db.estimates
-        
-        # Check if estimate exists
-        estimate = await estimates_collection.find_one({"estimate_id": estimate_id})  # type: ignore
+        estimate = estimates_collection.find_one({"estimate_id": estimate_id})
         if not estimate:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Estimate not found"
             )
-        
-        # Check if estimate has been converted to order
         if estimate.get("is_converted_to_order", False):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot delete estimate that has been converted to order"
             )
-        
-        # Delete the estimate
-        result = await estimates_collection.delete_one({"estimate_id": estimate_id})  # type: ignore
-        
+        result = estimates_collection.delete_one({"estimate_id": estimate_id})
         if result.deleted_count > 0:
-            # Notify all WebSocket clients of the update
-            asyncio.create_task(websocket_manager.broadcast_update("estimate_deleted"))
+            import asyncio
+            try:
+                asyncio.create_task(websocket_manager.broadcast_update({
+                    "type": "estimate",
+                    "action": "delete",
+                    "id": estimate_id
+                }))
+            except Exception as ws_error:
+                print(f"⚠️ WebSocket notification failed: {ws_error}")
             return {
                 "success": True,
                 "message": "Estimate deleted successfully"
@@ -269,7 +281,6 @@ async def delete_estimate(estimate_id: str):
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to delete estimate"
             )
-            
     except HTTPException:
         raise
     except Exception as e:
@@ -279,34 +290,28 @@ async def delete_estimate(estimate_id: str):
         )
 
 @router.post("/{estimate_id}/convert-to-order")
-async def convert_estimate_to_order(estimate_id: str, payment_mode: str = "Cash", sale_by: Optional[str] = None):
+def convert_estimate_to_order(estimate_id: str, payment_mode: str = "Cash", sale_by: Optional[str] = None):
     """Convert an estimate to an order"""
     try:
         db = get_database()
         estimates_collection = db.estimates
         orders_collection = db.orders
-        
-        # Get the estimate
-        estimate = await estimates_collection.find_one({"estimate_id": estimate_id})  # type: ignore
+        estimate = estimates_collection.find_one({"estimate_id": estimate_id})
         if not estimate:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Estimate not found"
             )
-        
-        # Check if estimate has already been converted
         if estimate.get("is_converted_to_order", False):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Estimate has already been converted to order"
             )
-        
-        # Generate order data from estimate
         order_data = {
             "customer_name": estimate["customer_name"],
             "customer_phone": estimate["customer_phone"],
             "customer_address": estimate["customer_address"],
-            "sale_by": sale_by if sale_by else estimate["sale_by"],
+            "sale_by": sale_by if sale_by is not None else estimate["sale_by"],
             "items": estimate["items"],
             "subtotal": estimate["subtotal"],
             "discount_amount": estimate["discount_amount"],
@@ -318,37 +323,29 @@ async def convert_estimate_to_order(estimate_id: str, payment_mode: str = "Cash"
             "source_estimate_id": estimate["estimate_id"],
             "source_estimate_number": estimate["estimate_number"]
         }
-        
-        # Generate order ID and sale number
         order_data["order_id"] = f"ORDER-{uuid.uuid4().hex[:8].upper()}"
-        
-        # Get next sale number
         from routers.orders_route_new import get_next_sale_number
-        order_data["sale_number"] = await get_next_sale_number()
-        
-        # Set status
+        order_data["sale_number"] = get_next_sale_number()
         order_data["status"] = "Completed"
         order_data["is_from_estimate"] = True
-        
-        # Insert the order
-        order_result = await orders_collection.insert_one(order_data)  # type: ignore
-        
+        order_result = orders_collection.insert_one(order_data)
         if order_result.inserted_id:
-            # Update the estimate to mark it as converted
-            await estimates_collection.update_one(  # type: ignore
+            estimates_collection.update_one(
                 {"estimate_id": estimate_id},
-                {
-                    "$set": {
-                        "is_converted_to_order": True,
-                        "linked_order_id": order_data["order_id"],
-                        "linked_order_number": order_data["sale_number"]
-                    }
-                }
+                {"$set": {
+                    "is_converted_to_order": True,
+                    "linked_order_id": order_data["order_id"],
+                    "linked_order_number": order_data["sale_number"]
+                }}
             )
-            
-            # Notify all WebSocket clients of the update
-            asyncio.create_task(websocket_manager.broadcast_update("estimate_converted_to_order"))
-            
+            import asyncio
+            asyncio.create_task(websocket_manager.broadcast_update({
+                "type": "estimate",
+                "action": "convert_to_order",
+                "id": estimate_id,
+                "order_id": order_data["order_id"],
+                "order_number": order_data["sale_number"]
+            }))
             return {
                 "success": True,
                 "message": "Estimate converted to order successfully!",
@@ -370,7 +367,6 @@ async def convert_estimate_to_order(estimate_id: str, payment_mode: str = "Cash"
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create order from estimate"
             )
-            
     except HTTPException:
         raise
     except Exception as e:

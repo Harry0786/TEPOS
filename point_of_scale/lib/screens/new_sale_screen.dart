@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../services/api_service.dart';
 import '../services/pdf_service.dart';
 import '../services/performance_service.dart';
@@ -868,24 +869,25 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
           _currentEstimateNumber = response['estimate_number'];
         }
 
-        // Generate PDF
+        // Generate PDF in background to prevent freezing
         File? pdfFile;
         try {
-          pdfFile = await PdfService.generateEstimatePdf(
-            estimateNumber:
+          // Use compute to run PDF generation in background
+          pdfFile = await compute(_generateEstimatePdfInBackground, {
+            'estimateNumber':
                 response['estimate_number'] ??
                 'EST-${DateTime.now().millisecondsSinceEpoch}',
-            customerName: _customerNameController.text,
-            customerPhone: _customerWhatsAppController.text,
-            customerAddress: _customerAddressController.text,
-            saleBy: _selectedSaleBy,
-            items: _cartItems,
-            subtotal: _subtotal,
-            discountAmount: _discountAmount,
-            isPercentageDiscount: _isPercentageDiscount,
-            total: _total,
-            createdAt: DateTime.now(),
-          );
+            'customerName': _customerNameController.text,
+            'customerPhone': _customerWhatsAppController.text,
+            'customerAddress': _customerAddressController.text,
+            'saleBy': _selectedSaleBy,
+            'items': _cartItems,
+            'subtotal': _subtotal,
+            'discountAmount': _discountAmount,
+            'isPercentageDiscount': _isPercentageDiscount,
+            'total': _total,
+            'createdAt': DateTime.now().toIso8601String(),
+          });
         } catch (pdfError) {
           print('PDF generation error: $pdfError');
           // Continue without PDF if generation fails
@@ -912,6 +914,30 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     }
 
     _performanceService.endOperation('NewSaleScreen.sendEstimate');
+  }
+
+  // Static method for background PDF generation
+  static Future<File?> _generateEstimatePdfInBackground(
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      return await PdfService.generateEstimatePdf(
+        estimateNumber: data['estimateNumber'],
+        customerName: data['customerName'],
+        customerPhone: data['customerPhone'],
+        customerAddress: data['customerAddress'],
+        saleBy: data['saleBy'],
+        items: List<Map<String, dynamic>>.from(data['items']),
+        subtotal: data['subtotal'].toDouble(),
+        discountAmount: data['discountAmount'].toDouble(),
+        isPercentageDiscount: data['isPercentageDiscount'],
+        total: data['total'].toDouble(),
+        createdAt: DateTime.parse(data['createdAt']),
+      );
+    } catch (e) {
+      print('Background PDF generation error: $e');
+      return null;
+    }
   }
 
   void _showEstimateSuccessDialog(
@@ -1762,7 +1788,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         },
       );
 
-      // Close loading dialog
+      // Close loading dialog safely
       if (mounted) {
         Navigator.of(context).pop();
       }
@@ -1779,7 +1805,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         }
       }
     } catch (e) {
-      // Close loading dialog
+      // Close loading dialog safely
       if (mounted) {
         Navigator.of(context).pop();
         _showSaleErrorDialog('Error: $e');

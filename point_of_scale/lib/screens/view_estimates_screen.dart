@@ -27,8 +27,18 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
     _webSocketService.messageStream.listen((message) {
       if (message == 'estimate_updated' ||
           message == 'order_updated' ||
-          message == 'sale_completed') {
-        if (mounted) _fetchEstimates();
+          message == 'sale_completed' ||
+          message == 'estimate_created' ||
+          message == 'estimate_deleted' ||
+          message == 'estimate_converted_to_order') {
+        if (mounted) {
+          print(
+            '🔄 WebSocket message received: $message - refreshing estimates...',
+          );
+          // Clear cache to ensure fresh data
+          ApiService.clearCache();
+          _fetchEstimates();
+        }
       }
     });
     _fetchEstimates();
@@ -787,7 +797,7 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                             total: (estimate['total'] ?? 0.0).toDouble(),
                             paymentMode: selectedPaymentMode,
                           ).timeout(
-                            const Duration(seconds: 30),
+                            const Duration(seconds: 15), // Reduced timeout
                             onTimeout: () {
                               throw Exception(
                                 'Request timeout - please check your connection',
@@ -829,6 +839,7 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                                       'Estimate converted to order!',
                                     ),
                                     backgroundColor: Color(0xFF6B8E7F),
+                                    duration: Duration(seconds: 2),
                                   ),
                                 );
                               }
@@ -844,6 +855,11 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                               await ApiService.deleteEstimate(
                                 estimateId:
                                     estimate['estimate_id'] ?? estimate['id'],
+                              ).timeout(
+                                const Duration(seconds: 10), // Shorter timeout for deletion
+                                onTimeout: () {
+                                  throw Exception('Delete operation timed out');
+                                },
                               );
                               print('✅ Estimate deleted successfully');
                             } catch (deleteError) {
@@ -875,6 +891,7 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                                       'Failed to convert: ${result['message'] ?? 'Unknown error'}',
                                     ),
                                     backgroundColor: Colors.red,
+                                    duration: Duration(seconds: 3),
                                   ),
                                 );
                               }
@@ -912,6 +929,7 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                                 SnackBar(
                                   content: Text('Error: ${e.toString()}'),
                                   backgroundColor: Colors.red,
+                                  duration: Duration(seconds: 4),
                                 ),
                               );
                             }

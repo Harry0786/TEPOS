@@ -17,11 +17,15 @@ class ApiService {
 
   // Cache for API responses
   static final Map<String, dynamic> _cache = {};
-  static const Duration _cacheExpiry = Duration(minutes: 5);
+  static const Duration _cacheExpiry = Duration(minutes: 1);
 
   // Retry configuration
   static const int _maxRetries = 3;
   static const Duration _retryDelay = Duration(seconds: 2);
+
+  // Request tracking to prevent duplicate calls
+  static final Set<String> _activeRequests = {};
+  static const Duration _requestTimeout = Duration(seconds: 30);
 
   // Send Estimate endpoint
   static Future<Map<String, dynamic>> sendEstimate({
@@ -35,70 +39,74 @@ class ApiService {
     required bool isPercentageDiscount,
     required double total,
   }) async {
-    return _retryRequest(() async {
-      final url = Uri.parse('$baseUrl/estimates/create');
+    final requestKey = 'sendEstimate_${DateTime.now().millisecondsSinceEpoch}';
+    return _preventDuplicateRequest(
+      requestKey,
+      () => _retryRequest(() async {
+        final url = Uri.parse('$baseUrl/estimates/create');
 
-      print('🌐 API Request URL: $url');
-      print('📤 Sending data to API...');
+        print('🌐 API Request URL: $url');
+        print('📤 Sending data to API...');
 
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-
-      final body = json.encode({
-        'customer_name': customerName,
-        'customer_phone': customerPhone,
-        'customer_address': customerAddress,
-        'sale_by': saleBy,
-        'items': items,
-        'subtotal': subtotal,
-        'discount_amount': discountAmount,
-        'is_percentage_discount': isPercentageDiscount,
-        'discount_percentage':
-            isPercentageDiscount
-                ? discountAmount
-                : (discountAmount / subtotal) * 100,
-        'total': total,
-        'created_at': DateTime.now().toIso8601String(),
-      });
-
-      print('📋 Request Body: $body');
-
-      final response = await http
-          .post(url, headers: headers, body: body)
-          .timeout(
-            const Duration(seconds: 30),
-            onTimeout: () {
-              throw Exception('Request timeout - server not responding');
-            },
-          );
-
-      print('📥 Response Status: ${response.statusCode}');
-      print('📥 Response Body: ${response.body}');
-
-      final responseData = json.decode(response.body);
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        // Clear cache when new data is created
-        _clearCache();
-        return {
-          'success': true,
-          'message': responseData['message'] ?? 'Estimate sent successfully!',
-          'data': responseData['data'] ?? {},
-          'estimate_id': responseData['estimate_id'] ?? '',
-          'estimate_number': responseData['estimate_number'] ?? '',
+        final headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
         };
-      } else {
-        return {
-          'success': false,
-          'message': responseData['message'] ?? 'Failed to send estimate',
-          'error':
-              responseData['error'] ??
-              'Server returned status ${response.statusCode}',
-        };
-      }
-    });
+
+        final body = json.encode({
+          'customer_name': customerName,
+          'customer_phone': customerPhone,
+          'customer_address': customerAddress,
+          'sale_by': saleBy,
+          'items': items,
+          'subtotal': subtotal,
+          'discount_amount': discountAmount,
+          'is_percentage_discount': isPercentageDiscount,
+          'discount_percentage':
+              isPercentageDiscount
+                  ? discountAmount
+                  : (discountAmount / subtotal) * 100,
+          'total': total,
+          'created_at': DateTime.now().toIso8601String(),
+        });
+
+        print('📋 Request Body: $body');
+
+        final response = await http
+            .post(url, headers: headers, body: body)
+            .timeout(
+              const Duration(seconds: 30),
+              onTimeout: () {
+                throw Exception('Request timeout - server not responding');
+              },
+            );
+
+        print('📥 Response Status: ${response.statusCode}');
+        print('📥 Response Body: ${response.body}');
+
+        final responseData = json.decode(response.body);
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          // Clear cache when new data is created
+          _clearCache();
+          return {
+            'success': true,
+            'message': responseData['message'] ?? 'Estimate sent successfully!',
+            'data': responseData['data'] ?? {},
+            'estimate_id': responseData['estimate_id'] ?? '',
+            'estimate_number': responseData['estimate_number'] ?? '',
+          };
+        } else {
+          return {
+            'success': false,
+            'message': responseData['message'] ?? 'Failed to send estimate',
+            'error':
+                responseData['error'] ??
+                'Server returned status ${response.statusCode}',
+          };
+        }
+      }),
+    );
   }
 
   // Create Completed Sale endpoint
@@ -114,71 +122,80 @@ class ApiService {
     required double total,
     String paymentMode = "Cash",
   }) async {
-    return _retryRequest(() async {
-      final url = Uri.parse('$baseUrl/orders/create-sale');
+    final requestKey =
+        'createCompletedSale_${DateTime.now().millisecondsSinceEpoch}';
+    return _preventDuplicateRequest(
+      requestKey,
+      () => _retryRequest(() async {
+        final url = Uri.parse('$baseUrl/orders/create-sale');
 
-      print('🌐 API Request URL: $url');
-      print('📤 Sending completed sale data to API...');
+        print('🌐 API Request URL: $url');
+        print('📤 Sending completed sale data to API...');
 
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-
-      final body = json.encode({
-        'customer_name': customerName,
-        'customer_phone': customerPhone,
-        'customer_address': customerAddress,
-        'sale_by': saleBy,
-        'items': items,
-        'subtotal': subtotal,
-        'discount_amount': discountAmount,
-        'is_percentage_discount': isPercentageDiscount,
-        'discount_percentage':
-            isPercentageDiscount
-                ? discountAmount
-                : (discountAmount / subtotal) * 100,
-        'total': total,
-        'payment_mode': paymentMode,
-        'created_at': DateTime.now().toIso8601String(),
-      });
-
-      print('📋 Request Body: $body');
-
-      final response = await http
-          .post(url, headers: headers, body: body)
-          .timeout(
-            const Duration(seconds: 30),
-            onTimeout: () {
-              throw Exception('Request timeout - server not responding');
-            },
-          );
-
-      print('📥 Response Status: ${response.statusCode}');
-      print('📥 Response Body: ${response.body}');
-
-      final responseData = json.decode(response.body);
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        // Clear cache when new data is created
-        _clearCache();
-        return {
-          'success': true,
-          'message': responseData['message'] ?? 'Sale completed successfully!',
-          'data': responseData['data'] ?? {},
-          'sale_id': responseData['sale_id'] ?? '',
-          'sale_number': responseData['sale_number'] ?? '',
+        final headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
         };
-      } else {
-        return {
-          'success': false,
-          'message': responseData['message'] ?? 'Failed to complete sale',
-          'error':
-              responseData['error'] ??
-              'Server returned status ${response.statusCode}',
-        };
-      }
-    });
+
+        final body = json.encode({
+          'customer_name': customerName,
+          'customer_phone': customerPhone,
+          'customer_address': customerAddress,
+          'sale_by': saleBy,
+          'items': items,
+          'subtotal': subtotal,
+          'discount_amount': discountAmount,
+          'is_percentage_discount': isPercentageDiscount,
+          'discount_percentage':
+              isPercentageDiscount
+                  ? discountAmount
+                  : (discountAmount / subtotal) * 100,
+          'total': total,
+          'payment_mode': paymentMode,
+          'created_at': DateTime.now().toIso8601String(),
+        });
+
+        print('📋 Request Body: $body');
+
+        final response = await http
+            .post(url, headers: headers, body: body)
+            .timeout(
+              const Duration(seconds: 15), // Reduced timeout
+              onTimeout: () {
+                throw Exception('Request timeout - server not responding');
+              },
+            );
+
+        print('📥 Response Status: ${response.statusCode}');
+        print('📥 Response Body: ${response.body}');
+
+        final responseData = json.decode(response.body);
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          // Clear cache when new data is created
+          _clearCache();
+          return {
+            'success': true,
+            'message':
+                responseData['message'] ?? 'Sale completed successfully!',
+            'data': responseData['data'] ?? {},
+            'order_id': responseData['order_id'] ?? '',
+            'sale_number': responseData['sale_number'] ?? '',
+          };
+        } else {
+          return {
+            'success': false,
+            'message':
+                responseData['detail'] ??
+                responseData['message'] ??
+                'Failed to complete sale',
+            'error':
+                responseData['error'] ??
+                'Server returned status ${response.statusCode}',
+          };
+        }
+      }),
+    );
   }
 
   // Test connection method
@@ -285,8 +302,15 @@ class ApiService {
   }
 
   // Fetch all orders (completed sales only) from backend with caching
-  static Future<List<Map<String, dynamic>>> fetchOrders() async {
+  static Future<List<Map<String, dynamic>>> fetchOrders({
+    bool forceClearCache = false,
+  }) async {
     const cacheKey = 'orders';
+
+    if (forceClearCache) {
+      print('🧹 Forcing cache clear for orders');
+      _clearCache();
+    }
 
     // Check cache first
     if (_isCacheValid(cacheKey)) {
@@ -584,7 +608,7 @@ class ApiService {
       print('🗑️ Deleting estimate: $url');
       final response = await http
           .delete(url)
-          .timeout(const Duration(seconds: 20));
+          .timeout(const Duration(seconds: 10)); // Reduced timeout
       print('📡 Response status: ${response.statusCode}');
       print('📡 Response body: ${response.body}');
       final data = json.decode(response.body);
@@ -800,6 +824,26 @@ class ApiService {
     throw Exception('Max retries exceeded');
   }
 
+  // Prevent duplicate requests
+  static Future<T> _preventDuplicateRequest<T>(
+    String requestKey,
+    Future<T> Function() request,
+  ) async {
+    if (_activeRequests.contains(requestKey)) {
+      print('⚠️ Duplicate request detected: $requestKey - skipping');
+      throw Exception('Request already in progress');
+    }
+
+    _activeRequests.add(requestKey);
+
+    try {
+      final result = await request().timeout(_requestTimeout);
+      return result;
+    } finally {
+      _activeRequests.remove(requestKey);
+    }
+  }
+
   // Cache management
   static bool _isCacheValid(String key) {
     if (!_cache.containsKey(key)) return false;
@@ -818,5 +862,33 @@ class ApiService {
 
   static void clearCache() {
     _clearCache();
+  }
+
+  // Force refresh all data (clear cache and fetch fresh data)
+  static Future<Map<String, dynamic>> forceRefreshAllData() async {
+    print('🔄 Force refreshing all data...');
+
+    // Clear all cache
+    _clearCache();
+
+    try {
+      // Fetch fresh data
+      final orders = await fetchOrders(forceClearCache: true);
+      final estimates = await fetchEstimates(forceClearCache: true);
+
+      return {
+        'success': true,
+        'orders': orders,
+        'estimates': estimates,
+        'timestamp': DateTime.now(),
+      };
+    } catch (e) {
+      print('❌ Error force refreshing data: $e');
+      return {
+        'success': false,
+        'error': e.toString(),
+        'timestamp': DateTime.now(),
+      };
+    }
   }
 }

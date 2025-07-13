@@ -134,8 +134,14 @@ class _HomeScreenState extends State<HomeScreen>
     _webSocketService.messageStream.listen((message) {
       if (message == 'estimate_updated' ||
           message == 'order_updated' ||
-          message == 'sale_completed') {
+          message == 'sale_completed' ||
+          message == 'estimate_created' ||
+          message == 'estimate_deleted' ||
+          message == 'estimate_converted_to_order') {
         if (mounted) {
+          print('🔄 WebSocket message received: $message - refreshing data...');
+          // Clear cache to ensure fresh data
+          ApiService.clearCache();
           _loadData();
         }
       }
@@ -154,20 +160,32 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     try {
-      // Fetch orders and estimates separately
-      final orders = await ApiService.fetchOrders();
-      final estimates = await ApiService.fetchEstimates();
+      // Use the new force refresh method for better reliability
+      final refreshResult = await ApiService.forceRefreshAllData().timeout(
+        const Duration(seconds: 20),
+        onTimeout: () {
+          throw Exception('Data refresh timeout - please try again');
+        },
+      );
 
-      if (mounted) {
-        setState(() {
-          _orders = orders ?? [];
-          _estimates = estimates ?? [];
-          _isLoading = false;
-          _isRefreshing = false;
-          _lastRefreshTime = DateTime.now();
-          // Invalidate cache to force recalculation
-          _invalidateCache();
-        });
+      if (refreshResult['success'] == true) {
+        if (mounted) {
+          setState(() {
+            _orders = List<Map<String, dynamic>>.from(
+              refreshResult['orders'] ?? [],
+            );
+            _estimates = List<Map<String, dynamic>>.from(
+              refreshResult['estimates'] ?? [],
+            );
+            _isLoading = false;
+            _isRefreshing = false;
+            _lastRefreshTime = DateTime.now();
+            // Invalidate cache to force recalculation
+            _invalidateCache();
+          });
+        }
+      } else {
+        throw Exception(refreshResult['error'] ?? 'Failed to refresh data');
       }
     } catch (e) {
       print('❌ Error loading data: $e');
@@ -1325,6 +1343,8 @@ class _HomeScreenState extends State<HomeScreen>
     ) {
       if (mounted && !_isRefreshing) {
         print('🔄 Auto-refreshing data...');
+        // Clear cache to ensure fresh data
+        ApiService.clearCache();
         _loadData();
       }
     });
@@ -1344,6 +1364,8 @@ class _HomeScreenState extends State<HomeScreen>
     // Check if it's been more than 1 minute since last refresh
     if (_lastRefreshTime == null ||
         DateTime.now().difference(_lastRefreshTime!).inMinutes >= 1) {
+      // Clear cache to ensure fresh data on app resume
+      ApiService.clearCache();
       _loadData();
     }
 
@@ -1376,7 +1398,11 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _forceRefresh() async {
     print('🔄 Force refreshing data...');
+
+    // Clear all caches
+    ApiService.clearCache();
     _invalidateCache();
+
     await _loadData();
 
     if (mounted) {

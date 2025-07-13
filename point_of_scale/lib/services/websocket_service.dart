@@ -7,7 +7,13 @@ class WebSocketService {
   StreamController<String>? _messageController;
   bool _isConnected = false;
   Timer? _reconnectTimer;
+  Timer? _debounceTimer;
   final String _serverUrl;
+
+  // Debouncing configuration
+  static const Duration _debounceDelay = Duration(milliseconds: 500);
+  String? _lastMessage;
+  DateTime? _lastMessageTime;
 
   WebSocketService({required String serverUrl}) : _serverUrl = serverUrl;
 
@@ -28,8 +34,7 @@ class WebSocketService {
 
       _channel!.stream.listen(
         (message) {
-          print('📨 WebSocket message received: $message');
-          _messageController?.add(message.toString());
+          _handleMessage(message.toString());
         },
         onError: (error) {
           print('❌ WebSocket error: $error');
@@ -51,9 +56,37 @@ class WebSocketService {
     }
   }
 
+  void _handleMessage(String message) {
+    // Debounce messages to prevent spam
+    if (_lastMessage == message &&
+        _lastMessageTime != null &&
+        DateTime.now().difference(_lastMessageTime!) < _debounceDelay) {
+      print('🔄 Debouncing duplicate message: $message');
+      return;
+    }
+
+    _lastMessage = message;
+    _lastMessageTime = DateTime.now();
+
+    print('📨 WebSocket message received: $message');
+
+    // Cancel any existing debounce timer
+    _debounceTimer?.cancel();
+
+    // Debounce the message emission
+    _debounceTimer = Timer(_debounceDelay, () {
+      try {
+        _messageController?.add(message);
+      } catch (e) {
+        print('❌ Error emitting WebSocket message: $e');
+      }
+    });
+  }
+
   void disconnect() {
     print('🔌 Disconnecting WebSocket');
     _reconnectTimer?.cancel();
+    _debounceTimer?.cancel();
     _channel?.sink.close(status.goingAway);
     _isConnected = false;
   }
