@@ -626,6 +626,89 @@ class ApiService {
     });
   }
 
+  // Convert estimate to order
+  static Future<Map<String, dynamic>> convertEstimateToOrder({
+    required String estimateId,
+    required String paymentMode,
+    String? saleBy,
+  }) async {
+    final requestKey =
+        'convertEstimateToOrder_${estimateId}_${DateTime.now().millisecondsSinceEpoch}';
+    return _preventDuplicateRequest(
+      requestKey,
+      () => _retryRequest(() async {
+        final url = Uri.parse(
+          '$baseUrl/estimates/$estimateId/convert-to-order',
+        );
+
+        print('🔄 Converting estimate to order: $url');
+        print('📋 Estimate ID: $estimateId');
+        print('💳 Payment Mode: $paymentMode');
+        print('👤 Sale By: $saleBy');
+
+        final headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        };
+
+        final queryParams = <String, String>{'payment_mode': paymentMode};
+
+        if (saleBy != null && saleBy.isNotEmpty) {
+          queryParams['sale_by'] = saleBy;
+        }
+
+        final uri = url.replace(queryParameters: queryParams);
+
+        final response = await http
+            .post(uri, headers: headers)
+            .timeout(
+              const Duration(seconds: 20),
+              onTimeout: () {
+                throw Exception('Request timeout - server not responding');
+              },
+            );
+
+        print('📥 Response Status: ${response.statusCode}');
+        print('📥 Response Body: ${response.body}');
+
+        final responseData = json.decode(response.body);
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          // Clear cache when data is updated
+          _clearCache();
+          return {
+            'success': true,
+            'message':
+                responseData['message'] ??
+                'Estimate converted to order successfully!',
+            'data': responseData['data'] ?? {},
+            'order_id':
+                responseData['order_id'] ??
+                responseData['data']?['order_id'] ??
+                '',
+            'sale_number':
+                responseData['sale_number'] ??
+                responseData['data']?['sale_number'] ??
+                '',
+            'estimate_id': responseData['data']?['estimate_id'] ?? estimateId,
+            'estimate_number': responseData['data']?['estimate_number'] ?? '',
+          };
+        } else {
+          return {
+            'success': false,
+            'message':
+                responseData['detail'] ??
+                responseData['message'] ??
+                'Failed to convert estimate to order',
+            'error':
+                responseData['error'] ??
+                'Server returned status ${response.statusCode}',
+          };
+        }
+      }),
+    );
+  }
+
   // Customer Management API Methods
   static Future<List<Map<String, dynamic>>?> fetchCustomers() async {
     try {

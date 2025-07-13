@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../services/api_service.dart';
 import '../services/websocket_service.dart';
 import 'package:printing/printing.dart';
@@ -878,26 +879,55 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                       onPressed: () async {
                         Navigator.of(context).pop(); // Close dialog
 
-                        showDialog(
-                          context: context,
-                          barrierDismissible: false,
-                          builder:
-                              (context) => const AlertDialog(
-                                backgroundColor: Color(0xFF1A1A1A),
-                                content: Row(
-                                  children: [
-                                    CircularProgressIndicator(
-                                      color: Color(0xFF6B8E7F),
-                                    ),
-                                    SizedBox(width: 16),
-                                    Text(
-                                      'Converting to order...',
-                                      style: TextStyle(color: Colors.white),
-                                    ),
-                                  ],
+                        // Show loading dialog with better error handling
+                        bool dialogShown = false;
+                        try {
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder:
+                                (context) => const AlertDialog(
+                                  backgroundColor: Color(0xFF1A1A1A),
+                                  content: Row(
+                                    children: [
+                                      CircularProgressIndicator(
+                                        color: Color(0xFF6B8E7F),
+                                      ),
+                                      SizedBox(width: 16),
+                                      Text(
+                                        'Converting to order...',
+                                        style: TextStyle(color: Colors.white),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                        );
+                          );
+                          dialogShown = true;
+                          print('✅ Loading dialog shown successfully');
+
+                          // Set a safety timeout to close dialog if something goes wrong
+                          Timer(const Duration(seconds: 30), () {
+                            if (dialogShown && mounted) {
+                              try {
+                                if (Navigator.of(context).canPop()) {
+                                  Navigator.of(context).pop();
+                                  print(
+                                    '🕐 Loading dialog closed by safety timeout',
+                                  );
+                                }
+                              } catch (timeoutError) {
+                                print(
+                                  '⚠️ Safety timeout dialog close failed: $timeoutError',
+                                );
+                              }
+                            }
+                          });
+                        } catch (dialogError) {
+                          print(
+                            '⚠️ Error showing loading dialog: $dialogError',
+                          );
+                          dialogShown = false;
+                        }
 
                         try {
                           print('🔄 Starting estimate to order conversion...');
@@ -905,24 +935,16 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                           print('👤 Sale By: $selectedSaleBy');
                           print('💳 Payment Mode: $selectedPaymentMode');
 
-                          // Use the existing createCompletedSale function instead
-                          final result = await ApiService.createCompletedSale(
-                            customerName: estimate['customer_name'] ?? '',
-                            customerPhone: estimate['customer_phone'] ?? '',
-                            customerAddress: estimate['customer_address'] ?? '',
-                            saleBy: selectedSaleBy,
-                            items: List<Map<String, dynamic>>.from(
-                              estimate['items'] ?? [],
-                            ),
-                            subtotal: (estimate['subtotal'] ?? 0.0).toDouble(),
-                            discountAmount:
-                                (estimate['discount_amount'] ?? 0.0).toDouble(),
-                            isPercentageDiscount:
-                                estimate['is_percentage_discount'] ?? true,
-                            total: (estimate['total'] ?? 0.0).toDouble(),
+                          // Use the proper convertEstimateToOrder function
+                          final result = await ApiService.convertEstimateToOrder(
+                            estimateId:
+                                estimate['estimate_id'] ?? estimate['id'],
                             paymentMode: selectedPaymentMode,
+                            saleBy: selectedSaleBy,
                           ).timeout(
-                            const Duration(seconds: 15), // Reduced timeout
+                            const Duration(
+                              seconds: 25,
+                            ), // Increased timeout for conversion
                             onTimeout: () {
                               throw Exception(
                                 'Request timeout - please check your connection',
@@ -943,14 +965,34 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                           }
 
                           // Safely close loading dialog
-                          try {
-                            Navigator.of(context).pop(); // Close loading dialog
-                            print('✅ Loading dialog closed successfully');
-                          } catch (dialogError) {
+                          if (dialogShown && mounted) {
+                            try {
+                              Navigator.of(
+                                context,
+                              ).pop(); // Close loading dialog
+                              print('✅ Loading dialog closed successfully');
+                            } catch (dialogError) {
+                              print(
+                                '⚠️ Error closing loading dialog: $dialogError',
+                              );
+                              // Try alternative method to close dialog
+                              try {
+                                if (Navigator.of(context).canPop()) {
+                                  Navigator.of(context).pop();
+                                  print(
+                                    '✅ Loading dialog closed with alternative method',
+                                  );
+                                }
+                              } catch (altError) {
+                                print(
+                                  '⚠️ Alternative dialog close also failed: $altError',
+                                );
+                              }
+                            }
+                          } else {
                             print(
-                              '⚠️ Error closing loading dialog: $dialogError',
+                              '⚠️ Dialog not shown or widget not mounted, skipping close',
                             );
-                            // Continue even if dialog close fails
                           }
 
                           if (result['success'] == true) {
@@ -974,37 +1016,11 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                               );
                             }
 
-                            // Delete the estimate after successful order creation
-                            try {
-                              print('🗑️ Deleting original estimate...');
-                              await ApiService.deleteEstimate(
-                                estimateId:
-                                    estimate['estimate_id'] ?? estimate['id'],
-                              ).timeout(
-                                const Duration(
-                                  seconds: 10,
-                                ), // Shorter timeout for deletion
-                                onTimeout: () {
-                                  throw Exception('Delete operation timed out');
-                                },
-                              );
-                              print('✅ Estimate deleted successfully');
-                            } catch (deleteError) {
-                              print(
-                                'Warning: Failed to delete estimate: $deleteError',
-                              );
-                              // Continue even if estimate deletion fails
-                            }
-                            print('🔄 Refreshing estimates list...');
-                            try {
-                              await _fetchEstimates();
-                              print('✅ Estimates list refreshed successfully');
-                            } catch (fetchError) {
-                              print(
-                                'Warning: Failed to refresh estimates list: $fetchError',
-                              );
-                              // Continue even if refresh fails
-                            }
+                            // The backend conversion endpoint handles estimate linking automatically
+                            // No need to manually delete or refresh - WebSocket will handle updates
+                            print(
+                              '✅ Estimate conversion completed successfully',
+                            );
                           } else {
                             print(
                               '❌ Order creation failed: ${result['message']}',
@@ -1039,13 +1055,34 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                             return;
                           }
 
-                          // Safely close loading dialog
-                          try {
-                            Navigator.of(context).pop(); // Close loading dialog
-                            print('✅ Loading dialog closed after error');
-                          } catch (dialogError) {
+                          // Safely close loading dialog after error
+                          if (dialogShown && mounted) {
+                            try {
+                              Navigator.of(
+                                context,
+                              ).pop(); // Close loading dialog
+                              print('✅ Loading dialog closed after error');
+                            } catch (dialogError) {
+                              print(
+                                '⚠️ Error closing loading dialog after error: $dialogError',
+                              );
+                              // Try alternative method to close dialog
+                              try {
+                                if (Navigator.of(context).canPop()) {
+                                  Navigator.of(context).pop();
+                                  print(
+                                    '✅ Loading dialog closed with alternative method after error',
+                                  );
+                                }
+                              } catch (altError) {
+                                print(
+                                  '⚠️ Alternative dialog close also failed after error: $altError',
+                                );
+                              }
+                            }
+                          } else {
                             print(
-                              '⚠️ Error closing loading dialog after error: $dialogError',
+                              '⚠️ Dialog not shown or widget not mounted, skipping close after error',
                             );
                           }
 
