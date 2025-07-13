@@ -872,6 +872,9 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ],
               ),
+              const SizedBox(height: 10),
+              // Payment Mode Breakdown
+              _buildPaymentBreakdown(),
             ],
           ),
         ],
@@ -935,6 +938,180 @@ class _HomeScreenState extends State<HomeScreen>
         ],
       ),
     );
+  }
+
+  Widget _buildPaymentBreakdown() {
+    // Get payment breakdown from orders
+    final paymentBreakdown = _getPaymentBreakdown();
+
+    if (paymentBreakdown.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0D0D0D),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF3A3A3A)),
+        ),
+        child: const Center(
+          child: Text(
+            'No payment data available',
+            style: TextStyle(color: Colors.grey, fontSize: 12),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.payment, color: Color(0xFF4CAF50), size: 14),
+            const SizedBox(width: 6),
+            Text(
+              'Payment Breakdown',
+              style: TextStyle(
+                color: Colors.grey[400],
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children:
+              paymentBreakdown.entries.map((entry) {
+                final mode = entry.key;
+                final data = entry.value;
+                final count = data['count'] as int;
+                final amount = data['amount'] as double;
+
+                if (count == 0) return const SizedBox.shrink();
+
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _getPaymentModeColor(mode),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _getPaymentModeDisplayName(mode),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        'Rs. ${amount.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        '$count orders',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 9,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Map<String, Map<String, dynamic>> _getPaymentBreakdown() {
+    final breakdown = <String, Map<String, dynamic>>{
+      'cash': {'count': 0, 'amount': 0.0},
+      'card': {'count': 0, 'amount': 0.0},
+      'online': {'count': 0, 'amount': 0.0},
+      'upi': {'count': 0, 'amount': 0.0},
+      'bank_transfer': {'count': 0, 'amount': 0.0},
+      'cheque': {'count': 0, 'amount': 0.0},
+      'other': {'count': 0, 'amount': 0.0},
+    };
+
+    for (final order in _orders) {
+      final status = order['status']?.toString().toLowerCase() ?? '';
+      if (status == 'completed') {
+        final paymentMode =
+            order['payment_mode']?.toString().toLowerCase() ?? 'other';
+        final amount = order['total'] ?? order['amount'] ?? 0.0;
+
+        if (breakdown.containsKey(paymentMode)) {
+          breakdown[paymentMode]!['count'] =
+              (breakdown[paymentMode]!['count'] as int) + 1;
+          breakdown[paymentMode]!['amount'] =
+              (breakdown[paymentMode]!['amount'] as double) +
+              (amount is num ? amount.toDouble() : 0.0);
+        } else {
+          breakdown['other']!['count'] =
+              (breakdown['other']!['count'] as int) + 1;
+          breakdown['other']!['amount'] =
+              (breakdown['other']!['amount'] as double) +
+              (amount is num ? amount.toDouble() : 0.0);
+        }
+      }
+    }
+
+    return breakdown;
+  }
+
+  String _getPaymentModeDisplayName(String mode) {
+    switch (mode) {
+      case 'cash':
+        return 'Cash';
+      case 'card':
+        return 'Card';
+      case 'online':
+        return 'Online';
+      case 'upi':
+        return 'UPI';
+      case 'bank_transfer':
+        return 'Bank Transfer';
+      case 'cheque':
+        return 'Cheque';
+      case 'other':
+        return 'Other';
+      default:
+        return mode.toUpperCase();
+    }
+  }
+
+  Color _getPaymentModeColor(String mode) {
+    switch (mode) {
+      case 'cash':
+        return const Color(0xFF4CAF50);
+      case 'card':
+        return const Color(0xFF2196F3);
+      case 'online':
+        return const Color(0xFF9C27B0);
+      case 'upi':
+        return const Color(0xFF673AB7);
+      case 'bank_transfer':
+        return const Color(0xFFFF9800);
+      case 'cheque':
+        return const Color(0xFF607D8B);
+      case 'other':
+        return const Color(0xFF795548);
+      default:
+        return const Color(0xFF757575);
+    }
   }
 
   Widget _buildQuickActionCard(

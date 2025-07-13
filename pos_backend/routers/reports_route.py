@@ -45,12 +45,31 @@ async def get_today_report():
         estimates_converted = len([e for e in today_estimates if e.get("is_converted_to_order", False)])
         estimates_pending = estimates_count - estimates_converted
         
-        # Calculate orders statistics
+        # Calculate orders statistics with detailed payment breakdown
         orders_count = len(today_orders)
         orders_total = sum(order.get("total", 0) for order in today_orders)
-        orders_cash = len([o for o in today_orders if o.get("payment_mode") == "Cash"])
-        orders_card = len([o for o in today_orders if o.get("payment_mode") == "Card"])
-        orders_online = len([o for o in today_orders if o.get("payment_mode") == "Online"])
+        
+        # Calculate payment mode breakdown with amounts
+        payment_breakdown = {
+            "cash": {"count": 0, "amount": 0.0},
+            "card": {"count": 0, "amount": 0.0},
+            "online": {"count": 0, "amount": 0.0},
+            "upi": {"count": 0, "amount": 0.0},
+            "bank_transfer": {"count": 0, "amount": 0.0},
+            "cheque": {"count": 0, "amount": 0.0},
+            "other": {"count": 0, "amount": 0.0}
+        }
+        
+        for order in today_orders:
+            payment_mode = order.get("payment_mode", "").lower()
+            amount = order.get("total", 0) or order.get("amount", 0)
+            
+            if payment_mode in payment_breakdown:
+                payment_breakdown[payment_mode]["count"] += 1
+                payment_breakdown[payment_mode]["amount"] += amount
+            else:
+                payment_breakdown["other"]["count"] += 1
+                payment_breakdown["other"]["amount"] += amount
         
         # Calculate overall statistics
         total_transactions = estimates_count + orders_count
@@ -76,11 +95,7 @@ async def get_today_report():
             "orders": {
                 "count": orders_count,
                 "total_amount": orders_total,
-                "payment_breakdown": {
-                    "cash": orders_cash,
-                    "card": orders_card,
-                    "online": orders_online
-                },
+                "payment_breakdown": payment_breakdown,
                 "items": today_orders
             }
         }
