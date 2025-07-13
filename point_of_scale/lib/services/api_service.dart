@@ -15,17 +15,28 @@ class ApiService {
     print('   WebSocket URL: $webSocketUrl');
   }
 
-  // Cache for API responses
+  // Enhanced cache for API responses with better TTL management
   static final Map<String, dynamic> _cache = {};
-  static const Duration _cacheExpiry = Duration(minutes: 1);
+  static const Duration _cacheExpiry = Duration(
+    minutes: 3,
+  ); // Increased from 1m
+  static const Duration _shortCacheExpiry = Duration(
+    minutes: 1,
+  ); // For frequently changing data
 
   // Retry configuration
-  static const int _maxRetries = 3;
-  static const Duration _retryDelay = Duration(seconds: 2);
+  static const int _maxRetries = 2; // Reduced from 3
+  static const Duration _retryDelay = Duration(seconds: 3); // Increased from 2s
 
   // Request tracking to prevent duplicate calls
   static final Set<String> _activeRequests = {};
-  static const Duration _requestTimeout = Duration(seconds: 30);
+  static const Duration _requestTimeout = Duration(
+    seconds: 25,
+  ); // Reduced from 30s
+
+  // Request deduplication with cooldown
+  static final Map<String, DateTime> _lastRequestTimes = {};
+  static const Duration _requestCooldown = Duration(seconds: 5);
 
   // Send Estimate endpoint
   static Future<Map<String, dynamic>> sendEstimate({
@@ -53,7 +64,7 @@ class ApiService {
           'Accept': 'application/json',
         };
 
-        final body = json.encode({
+        final body = {
           'customer_name': customerName,
           'customer_phone': customerPhone,
           'customer_address': customerAddress,
@@ -62,54 +73,109 @@ class ApiService {
           'subtotal': subtotal,
           'discount_amount': discountAmount,
           'is_percentage_discount': isPercentageDiscount,
-          'discount_percentage':
-              isPercentageDiscount
-                  ? discountAmount
-                  : (discountAmount / subtotal) * 100,
           'total': total,
-          'created_at': DateTime.now().toIso8601String(),
-        });
+        };
 
-        print('📋 Request Body: $body');
+        print('📤 Request body: ${json.encode(body)}');
 
         final response = await http
-            .post(url, headers: headers, body: body)
+            .post(url, headers: headers, body: json.encode(body))
             .timeout(
-              const Duration(seconds: 30),
+              const Duration(seconds: 20),
               onTimeout: () {
-                throw Exception('Request timeout - server not responding');
+                throw Exception('Request timeout - please try again');
               },
             );
 
-        print('📥 Response Status: ${response.statusCode}');
-        print('📥 Response Body: ${response.body}');
-
-        final responseData = json.decode(response.body);
+        print('📡 Response status: ${response.statusCode}');
+        print('📡 Response body: ${response.body}');
 
         if (response.statusCode == 200 || response.statusCode == 201) {
-          // Clear cache when new data is created
-          _clearCache();
+          final data = json.decode(response.body);
+
+          // Invalidate cache for estimates
+          _invalidateCache('estimates');
+
           return {
             'success': true,
-            'message': responseData['message'] ?? 'Estimate sent successfully!',
-            'data': responseData['data'] ?? {},
-            'estimate_id': responseData['estimate_id'] ?? '',
-            'estimate_number': responseData['estimate_number'] ?? '',
+            'message': 'Estimate sent successfully',
+            'data': data,
           };
         } else {
+          final errorData = json.decode(response.body);
           return {
             'success': false,
-            'message': responseData['message'] ?? 'Failed to send estimate',
-            'error':
-                responseData['error'] ??
-                'Server returned status ${response.statusCode}',
+            'message': errorData['detail'] ?? 'Failed to send estimate',
+            'error': 'Server returned status ${response.statusCode}',
           };
         }
       }),
     );
   }
 
-  // Create Completed Sale endpoint
+  // Convert estimate to order endpoint
+  static Future<Map<String, dynamic>> convertEstimateToOrder({
+    required String estimateId,
+    String? paymentMode,
+    String? saleBy,
+  }) async {
+    final requestKey = 'convertEstimate_$estimateId';
+    return _preventDuplicateRequest(
+      requestKey,
+      () => _retryRequest(() async {
+        final url = Uri.parse(
+          '$baseUrl/estimates/$estimateId/convert-to-order',
+        );
+
+        print('🌐 Converting estimate to order: $url');
+
+        final headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        };
+
+        // Prepare request body with optional parameters
+        final Map<String, dynamic> requestBody = {};
+        if (paymentMode != null) requestBody['payment_mode'] = paymentMode;
+        if (saleBy != null) requestBody['sale_by'] = saleBy;
+
+        final response = await http
+            .post(url, headers: headers, body: json.encode(requestBody))
+            .timeout(
+              const Duration(seconds: 25),
+              onTimeout: () {
+                throw Exception('Conversion timeout - please try again');
+              },
+            );
+
+        print('📡 Conversion response status: ${response.statusCode}');
+        print('📡 Conversion response body: ${response.body}');
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final data = json.decode(response.body);
+
+          // Invalidate both estimates and orders cache
+          _invalidateCache('estimates');
+          _invalidateCache('orders');
+
+          return {
+            'success': true,
+            'message': 'Estimate converted to order successfully',
+            'data': data,
+          };
+        } else {
+          final errorData = json.decode(response.body);
+          return {
+            'success': false,
+            'message': errorData['detail'] ?? 'Failed to convert estimate',
+            'error': 'Server returned status ${response.statusCode}',
+          };
+        }
+      }),
+    );
+  }
+
+  // Create completed sale endpoint
   static Future<Map<String, dynamic>> createCompletedSale({
     required String customerName,
     required String customerPhone,
@@ -120,24 +186,24 @@ class ApiService {
     required double discountAmount,
     required bool isPercentageDiscount,
     required double total,
-    String paymentMode = "Cash",
+    String? paymentMode,
   }) async {
     final requestKey =
         'createCompletedSale_${DateTime.now().millisecondsSinceEpoch}';
     return _preventDuplicateRequest(
       requestKey,
       () => _retryRequest(() async {
-        final url = Uri.parse('$baseUrl/orders/create-sale');
+        final url = Uri.parse('$baseUrl/orders/create');
 
         print('🌐 API Request URL: $url');
-        print('📤 Sending completed sale data to API...');
+        print('📤 Creating completed sale...');
 
         final headers = {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         };
 
-        final body = json.encode({
+        final body = {
           'customer_name': customerName,
           'customer_phone': customerPhone,
           'customer_address': customerAddress,
@@ -146,70 +212,62 @@ class ApiService {
           'subtotal': subtotal,
           'discount_amount': discountAmount,
           'is_percentage_discount': isPercentageDiscount,
-          'discount_percentage':
-              isPercentageDiscount
-                  ? discountAmount
-                  : (discountAmount / subtotal) * 100,
           'total': total,
-          'payment_mode': paymentMode,
-          'created_at': DateTime.now().toIso8601String(),
-        });
+        };
+        // Add payment mode if provided
+        if (paymentMode != null) {
+          body['payment_mode'] = paymentMode;
+        }
 
-        print('📋 Request Body: $body');
+        print('📤 Request body: ${json.encode(body)}');
 
         final response = await http
-            .post(url, headers: headers, body: body)
+            .post(url, headers: headers, body: json.encode(body))
             .timeout(
-              const Duration(seconds: 15), // Reduced timeout
+              const Duration(seconds: 20),
               onTimeout: () {
-                throw Exception('Request timeout - server not responding');
+                throw Exception('Request timeout - please try again');
               },
             );
 
-        print('📥 Response Status: ${response.statusCode}');
-        print('📥 Response Body: ${response.body}');
-
-        final responseData = json.decode(response.body);
+        print('📡 Response status: ${response.statusCode}');
+        print('📡 Response body: ${response.body}');
 
         if (response.statusCode == 200 || response.statusCode == 201) {
-          // Clear cache when new data is created
-          _clearCache();
+          final data = json.decode(response.body);
+
+          // Invalidate cache for orders
+          _invalidateCache('orders');
+
           return {
             'success': true,
-            'message':
-                responseData['message'] ?? 'Sale completed successfully!',
-            'data': responseData['data'] ?? {},
-            'order_id': responseData['order_id'] ?? '',
-            'sale_number': responseData['sale_number'] ?? '',
+            'message': 'Sale completed successfully',
+            'data': data,
           };
         } else {
+          final errorData = json.decode(response.body);
           return {
             'success': false,
-            'message':
-                responseData['detail'] ??
-                responseData['message'] ??
-                'Failed to complete sale',
-            'error':
-                responseData['error'] ??
-                'Server returned status ${response.statusCode}',
+            'message': errorData['detail'] ?? 'Failed to complete sale',
+            'error': 'Server returned status ${response.statusCode}',
           };
         }
       }),
     );
   }
 
-  // Test connection method
+  // Test connection endpoint
   static Future<Map<String, dynamic>> testConnection() async {
     return _retryRequest(() async {
       final url = Uri.parse('$baseUrl/');
-      print('🔍 Testing connection to: $url');
+      print('🌐 Testing connection to: $url');
 
       final response = await http
           .get(url)
           .timeout(
             const Duration(seconds: 10),
             onTimeout: () {
-              throw Exception('Connection timeout');
+              throw Exception('Connection test timeout');
             },
           );
 
@@ -232,7 +290,7 @@ class ApiService {
       final response = await http
           .get(url)
           .timeout(
-            const Duration(seconds: 15),
+            const Duration(seconds: 10), // Reduced from 15s
             onTimeout: () {
               throw Exception('Backend health check timeout');
             },
@@ -248,7 +306,7 @@ class ApiService {
     });
   }
 
-  // Fetch all estimates from backend with caching
+  // Fetch all estimates from backend with enhanced caching
   static Future<List<Map<String, dynamic>>> fetchEstimates({
     bool forceClearCache = false,
   }) async {
@@ -256,11 +314,11 @@ class ApiService {
 
     if (forceClearCache) {
       print('🧹 Forcing cache clear for estimates');
-      _clearCache();
+      _invalidateCache(cacheKey);
     }
 
-    // Check cache first
-    if (_isCacheValid(cacheKey)) {
+    // Check cache first with cooldown
+    if (_isCacheValid(cacheKey) && !_isRequestInCooldown(cacheKey)) {
       print('📋 Returning cached estimates');
       return List<Map<String, dynamic>>.from(_cache[cacheKey]['data']);
     }
@@ -268,7 +326,9 @@ class ApiService {
     return _retryRequest(() async {
       print('🌐 Fetching estimates from: $baseUrl/estimates/all');
       final url = Uri.parse('$baseUrl/estimates/all');
-      final response = await http.get(url).timeout(const Duration(seconds: 20));
+      final response = await http
+          .get(url)
+          .timeout(const Duration(seconds: 15)); // Reduced from 20s
 
       print('📡 Response status: ${response.statusCode}');
       print('📡 Response body: ${response.body}');
@@ -289,8 +349,9 @@ class ApiService {
           print('⚠️ No estimates found in response data: $data');
         }
 
-        // Cache the result
+        // Cache the result with timestamp
         _cache[cacheKey] = {'data': estimates, 'timestamp': DateTime.now()};
+        _updateRequestCooldown(cacheKey);
         print('💾 Cached ${estimates.length} estimates');
 
         return estimates;
@@ -301,7 +362,7 @@ class ApiService {
     });
   }
 
-  // Fetch all orders (completed sales only) from backend with caching
+  // Fetch all orders (completed sales only) from backend with enhanced caching
   static Future<List<Map<String, dynamic>>> fetchOrders({
     bool forceClearCache = false,
   }) async {
@@ -309,18 +370,20 @@ class ApiService {
 
     if (forceClearCache) {
       print('🧹 Forcing cache clear for orders');
-      _clearCache();
+      _invalidateCache(cacheKey);
     }
 
-    // Check cache first
-    if (_isCacheValid(cacheKey)) {
+    // Check cache first with cooldown
+    if (_isCacheValid(cacheKey) && !_isRequestInCooldown(cacheKey)) {
       print('📦 Returning cached orders');
       return List<Map<String, dynamic>>.from(_cache[cacheKey]['data']);
     }
 
     return _retryRequest(() async {
       final url = Uri.parse('$baseUrl/orders/orders-only');
-      final response = await http.get(url).timeout(const Duration(seconds: 20));
+      final response = await http
+          .get(url)
+          .timeout(const Duration(seconds: 15)); // Reduced from 20s
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -330,8 +393,9 @@ class ApiService {
           orders = List<Map<String, dynamic>>.from(data['orders']['items']);
         }
 
-        // Cache the result
+        // Cache the result with timestamp
         _cache[cacheKey] = {'data': orders, 'timestamp': DateTime.now()};
+        _updateRequestCooldown(cacheKey);
 
         return orders;
       }
@@ -346,12 +410,14 @@ class ApiService {
   ) async {
     return _retryRequest(() async {
       final url = Uri.parse('$baseUrl/orders/$orderId/status?status=$status');
-      final response = await http.put(url).timeout(const Duration(seconds: 20));
+      final response = await http
+          .put(url)
+          .timeout(const Duration(seconds: 15)); // Reduced from 20s
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        // Clear cache when data is updated
-        _clearCache();
+        // Invalidate cache when data is updated
+        _invalidateCache('orders');
         return {
           'success': true,
           'message': data['message'] ?? 'Status updated successfully',
@@ -376,10 +442,9 @@ class ApiService {
         'Accept': 'application/json',
       };
 
-      final response = await http.get(
-        Uri.parse('$baseUrl/reports/today'),
-        headers: headers,
-      );
+      final response = await http
+          .get(Uri.parse('$baseUrl/reports/today'), headers: headers)
+          .timeout(const Duration(seconds: 15)); // Added timeout
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -613,7 +678,7 @@ class ApiService {
       print('📡 Response body: ${response.body}');
       final data = json.decode(response.body);
       if (response.statusCode == 200 || response.statusCode == 204) {
-        _clearCache();
+        _invalidateCache('estimates');
         return {'success': true, 'message': 'Estimate deleted successfully!'};
       } else {
         return {
@@ -626,105 +691,38 @@ class ApiService {
     });
   }
 
-  // Convert estimate to order
-  static Future<Map<String, dynamic>> convertEstimateToOrder({
-    required String estimateId,
-    required String paymentMode,
-    String? saleBy,
-  }) async {
-    final requestKey =
-        'convertEstimateToOrder_${estimateId}_${DateTime.now().millisecondsSinceEpoch}';
-    return _preventDuplicateRequest(
-      requestKey,
-      () => _retryRequest(() async {
-        final url = Uri.parse(
-          '$baseUrl/estimates/$estimateId/convert-to-order',
-        );
-
-        print('🔄 Converting estimate to order: $url');
-        print('📋 Estimate ID: $estimateId');
-        print('💳 Payment Mode: $paymentMode');
-        print('👤 Sale By: $saleBy');
-
-        final headers = {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        };
-
-        final queryParams = <String, String>{'payment_mode': paymentMode};
-
-        if (saleBy != null && saleBy.isNotEmpty) {
-          queryParams['sale_by'] = saleBy;
-        }
-
-        final uri = url.replace(queryParameters: queryParams);
-
-        final response = await http
-            .post(uri, headers: headers)
-            .timeout(
-              const Duration(seconds: 20),
-              onTimeout: () {
-                throw Exception('Request timeout - server not responding');
-              },
-            );
-
-        print('📥 Response Status: ${response.statusCode}');
-        print('📥 Response Body: ${response.body}');
-
-        final responseData = json.decode(response.body);
-
-        if (response.statusCode == 200 || response.statusCode == 201) {
-          // Clear cache when data is updated
-          _clearCache();
-          return {
-            'success': true,
-            'message':
-                responseData['message'] ??
-                'Estimate converted to order successfully!',
-            'data': responseData['data'] ?? {},
-            'order_id':
-                responseData['order_id'] ??
-                responseData['data']?['order_id'] ??
-                '',
-            'sale_number':
-                responseData['sale_number'] ??
-                responseData['data']?['sale_number'] ??
-                '',
-            'estimate_id': responseData['data']?['estimate_id'] ?? estimateId,
-            'estimate_number': responseData['data']?['estimate_number'] ?? '',
-          };
-        } else {
-          return {
-            'success': false,
-            'message':
-                responseData['detail'] ??
-                responseData['message'] ??
-                'Failed to convert estimate to order',
-            'error':
-                responseData['error'] ??
-                'Server returned status ${response.statusCode}',
-          };
-        }
-      }),
-    );
-  }
-
   // Customer Management API Methods
   static Future<List<Map<String, dynamic>>?> fetchCustomers() async {
+    const cacheKey = 'customers';
+
+    // Check cache first
+    if (_isCacheValid(cacheKey)) {
+      print('👥 Returning cached customers');
+      return List<Map<String, dynamic>>.from(_cache[cacheKey]['data']);
+    }
+
     try {
       final headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       };
 
-      final response = await http.get(
-        Uri.parse('$baseUrl/customers/all'),
-        headers: headers,
-      );
+      final response = await http
+          .get(Uri.parse('$baseUrl/customers'), headers: headers)
+          .timeout(const Duration(seconds: 15)); // Added timeout
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return data.cast<Map<String, dynamic>>();
+        final data = jsonDecode(response.body);
+        List<Map<String, dynamic>> customers = [];
+
+        if (data['customers'] != null) {
+          customers = List<Map<String, dynamic>>.from(data['customers']);
+        }
+
+        // Cache the result
+        _cache[cacheKey] = {'data': customers, 'timestamp': DateTime.now()};
+
+        return customers;
       } else {
         print('❌ Error fetching customers: ${response.statusCode}');
         return null;
@@ -816,19 +814,31 @@ class ApiService {
 
   // Settings API Methods
   static Future<Map<String, dynamic>?> fetchSettings() async {
+    const cacheKey = 'settings';
+
+    // Check cache first
+    if (_isCacheValid(cacheKey)) {
+      print('⚙️ Returning cached settings');
+      return Map<String, dynamic>.from(_cache[cacheKey]['data']);
+    }
+
     try {
       final headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       };
 
-      final response = await http.get(
-        Uri.parse('$baseUrl/settings'),
-        headers: headers,
-      );
+      final response = await http
+          .get(Uri.parse('$baseUrl/settings'), headers: headers)
+          .timeout(const Duration(seconds: 15)); // Added timeout
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        final data = jsonDecode(response.body);
+
+        // Cache the result
+        _cache[cacheKey] = {'data': data, 'timestamp': DateTime.now()};
+
+        return data;
       } else {
         print('❌ Error fetching settings: ${response.statusCode}');
         return null;
@@ -848,13 +858,17 @@ class ApiService {
         'Accept': 'application/json',
       };
 
-      final response = await http.put(
-        Uri.parse('$baseUrl/settings'),
-        headers: headers,
-        body: jsonEncode(settingsData),
-      );
+      final response = await http
+          .put(
+            Uri.parse('$baseUrl/settings'),
+            headers: headers,
+            body: jsonEncode(settingsData),
+          )
+          .timeout(const Duration(seconds: 15)); // Added timeout
 
       if (response.statusCode == 200) {
+        // Invalidate settings cache
+        _invalidateCache('settings');
         return jsonDecode(response.body);
       } else {
         print('❌ Error updating settings: ${response.statusCode}');
@@ -874,10 +888,9 @@ class ApiService {
         'Accept': 'application/json',
       };
 
-      final response = await http.get(
-        Uri.parse('$baseUrl/health'),
-        headers: headers,
-      );
+      final response = await http
+          .get(Uri.parse('$baseUrl/health'), headers: headers)
+          .timeout(const Duration(seconds: 8)); // Reduced timeout
 
       return response.statusCode == 200;
     } catch (e) {
@@ -900,14 +913,14 @@ class ApiService {
           rethrow;
         }
 
-        // Wait before retrying
+        // Wait before retrying with exponential backoff
         await Future.delayed(_retryDelay * attempts);
       }
     }
     throw Exception('Max retries exceeded');
   }
 
-  // Prevent duplicate requests
+  // Prevent duplicate requests with cooldown
   static Future<T> _preventDuplicateRequest<T>(
     String requestKey,
     Future<T> Function() request,
@@ -917,17 +930,24 @@ class ApiService {
       throw Exception('Request already in progress');
     }
 
+    // Check cooldown
+    if (_isRequestInCooldown(requestKey)) {
+      print('⏰ Request in cooldown: $requestKey - skipping');
+      throw Exception('Request in cooldown period');
+    }
+
     _activeRequests.add(requestKey);
 
     try {
       final result = await request().timeout(_requestTimeout);
+      _updateRequestCooldown(requestKey);
       return result;
     } finally {
       _activeRequests.remove(requestKey);
     }
   }
 
-  // Cache management
+  // Enhanced cache management
   static bool _isCacheValid(String key) {
     if (!_cache.containsKey(key)) return false;
 
@@ -935,12 +955,41 @@ class ApiService {
     final timestamp = cacheEntry['timestamp'] as DateTime;
     final now = DateTime.now();
 
-    return now.difference(timestamp) < _cacheExpiry;
+    // Use different expiry times for different data types
+    final expiry =
+        key == 'estimates' || key == 'orders'
+            ? _shortCacheExpiry
+            : _cacheExpiry;
+
+    return now.difference(timestamp) < expiry;
+  }
+
+  // Request cooldown management
+  static bool _isRequestInCooldown(String key) {
+    if (!_lastRequestTimes.containsKey(key)) return false;
+
+    final lastRequest = _lastRequestTimes[key]!;
+    final now = DateTime.now();
+
+    return now.difference(lastRequest) < _requestCooldown;
+  }
+
+  static void _updateRequestCooldown(String key) {
+    _lastRequestTimes[key] = DateTime.now();
+  }
+
+  // Smart cache invalidation
+  static void _invalidateCache(String key) {
+    if (_cache.containsKey(key)) {
+      _cache.remove(key);
+      print('🗑️ Cache invalidated: $key');
+    }
   }
 
   static void _clearCache() {
     _cache.clear();
-    print('🗑️ Cache cleared');
+    _lastRequestTimes.clear();
+    print('🗑️ All cache cleared');
   }
 
   static void clearCache() {
@@ -955,7 +1004,7 @@ class ApiService {
     _clearCache();
 
     try {
-      // Fetch fresh data
+      // Fetch fresh data with shorter timeouts
       final orders = await fetchOrders(forceClearCache: true);
       final estimates = await fetchEstimates(forceClearCache: true);
 
@@ -973,5 +1022,16 @@ class ApiService {
         'timestamp': DateTime.now(),
       };
     }
+  }
+
+  // Get service statistics
+  static Map<String, dynamic> getServiceStats() {
+    return {
+      'cacheSize': _cache.length,
+      'activeRequests': _activeRequests.length,
+      'lastRequestTimes': _lastRequestTimes.length,
+      'cacheKeys': _cache.keys.toList(),
+      'activeRequestKeys': _activeRequests.toList(),
+    };
   }
 }

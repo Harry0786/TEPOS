@@ -38,8 +38,7 @@ class _HomeScreenState extends State<HomeScreen>
   String _connectionStatus = 'Connecting...';
   DateTime? _lastConnectionTime;
 
-  // Auto refresh timers
-  Timer? _autoRefreshTimer;
+  // Auto refresh timers - optimized
   Timer? _periodicRefreshTimer;
   DateTime? _lastAppResumeTime;
 
@@ -61,7 +60,6 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void dispose() {
     // Cancel timers
-    _autoRefreshTimer?.cancel();
     _periodicRefreshTimer?.cancel();
 
     // Dispose services
@@ -150,8 +148,6 @@ class _HomeScreenState extends State<HomeScreen>
           print(
             '🔄 Legacy WebSocket message received: $message - refreshing data...',
           );
-          // Clear cache to ensure fresh data
-          ApiService.clearCache();
           _loadData();
         }
       }
@@ -179,7 +175,6 @@ class _HomeScreenState extends State<HomeScreen>
           print(
             '⚠️ Unknown estimate action: ${message.action} - doing full refresh',
           );
-          ApiService.clearCache();
           _loadData();
       }
     } else if (message.isOrder) {
@@ -198,13 +193,11 @@ class _HomeScreenState extends State<HomeScreen>
           print(
             '⚠️ Unknown order action: ${message.action} - doing full refresh',
           );
-          ApiService.clearCache();
           _loadData();
       }
     } else {
       // Unknown message type, do full refresh
       print('⚠️ Unknown message type: ${message.type} - doing full refresh');
-      ApiService.clearCache();
       _loadData();
     }
   }
@@ -1528,14 +1521,10 @@ class _HomeScreenState extends State<HomeScreen>
   // ===== AUTO REFRESH FUNCTIONALITY =====
 
   void _setupAutoRefresh() {
-    // Set up periodic refresh every 30 seconds
-    _periodicRefreshTimer = Timer.periodic(const Duration(seconds: 30), (
-      timer,
-    ) {
+    // Set up periodic refresh every 2 minutes (optimized)
+    _periodicRefreshTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
       if (mounted && !_isRefreshing) {
         print('🔄 Auto-refreshing data...');
-        // Clear cache to ensure fresh data
-        ApiService.clearCache();
         _loadData();
       }
     });
@@ -1552,11 +1541,9 @@ class _HomeScreenState extends State<HomeScreen>
     print('📱 App resumed - checking for updates...');
     _lastAppResumeTime = DateTime.now();
 
-    // Check if it's been more than 1 minute since last refresh
+    // Check if it's been more than 3 minutes since last refresh (optimized)
     if (_lastRefreshTime == null ||
-        DateTime.now().difference(_lastRefreshTime!).inMinutes >= 1) {
-      // Clear cache to ensure fresh data on app resume
-      ApiService.clearCache();
+        DateTime.now().difference(_lastRefreshTime!).inMinutes >= 3) {
       _loadData();
     }
 
@@ -1590,8 +1577,7 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _forceRefresh() async {
     print('🔄 Force refreshing data...');
 
-    // Clear all caches
-    ApiService.clearCache();
+    // Invalidate cache and load fresh data
     _invalidateCache();
 
     await _loadData();
@@ -1609,8 +1595,15 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _checkForUpdates() async {
     try {
-      // Check server health first
-      final isHealthy = await ApiService.checkServerHealth();
+      // Check server health first with shorter timeout
+      final isHealthy = await ApiService.checkServerHealth().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          print('⚠️ Server health check timeout');
+          return false;
+        },
+      );
+
       if (!isHealthy) {
         print('⚠️ Server health check failed');
         return;

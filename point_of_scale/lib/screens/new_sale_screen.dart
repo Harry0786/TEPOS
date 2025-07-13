@@ -510,67 +510,28 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Customer Name
+                    // Customer Name (required)
                     _buildInputField('Customer Name', _customerNameController),
                     const SizedBox(height: 12),
 
-                    // Phone Number (for reference only)
+                    // Phone Number (optional)
                     _buildInputField(
-                      'Phone Number (Optional)',
+                      'Phone Number',
                       _customerWhatsAppController,
                       isNumber: true,
                     ),
                     const SizedBox(height: 12),
 
-                    // Sale By Dropdown
-                    const Text(
-                      'Sale By:',
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0D0D0D),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF2A2A2A)),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _selectedSaleBy,
-                          dropdownColor: const Color(0xFF0D0D0D),
-                          style: const TextStyle(color: Colors.white),
-                          icon: const Icon(
-                            Icons.arrow_drop_down,
-                            color: Colors.grey,
-                          ),
-                          onChanged: (String? newValue) {
-                            setDialogState(() {
-                              _selectedSaleBy = newValue!;
-                            });
-                          },
-                          items:
-                              _saleByOptions.map<DropdownMenuItem<String>>((
-                                String value,
-                              ) {
-                                return DropdownMenuItem<String>(
-                                  value: value,
-                                  child: Text(value),
-                                );
-                              }).toList(),
-                        ),
-                      ),
-                    ),
+                    // Address (optional)
+                    _buildInputField('Address', _customerAddressController),
                     const SizedBox(height: 12),
 
-                    // Address
-                    TextField(
-                      controller: _customerAddressController,
-                      maxLines: 3,
-                      style: const TextStyle(color: Colors.white),
+                    // Sale By (move here)
+                    DropdownButtonFormField<String>(
+                      value: _selectedSaleBy,
+                      dropdownColor: const Color(0xFF1A1A1A),
                       decoration: InputDecoration(
-                        labelText: 'Address',
+                        labelText: 'Sale By',
                         labelStyle: TextStyle(color: Colors.grey[400]),
                         enabledBorder: OutlineInputBorder(
                           borderSide: const BorderSide(
@@ -587,6 +548,23 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                         filled: true,
                         fillColor: const Color(0xFF0D0D0D),
                       ),
+                      items:
+                          _saleByOptions
+                              .map(
+                                (option) => DropdownMenuItem<String>(
+                                  value: option,
+                                  child: Text(
+                                    option,
+                                    style: const TextStyle(color: Colors.white),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          _selectedSaleBy = value ?? _selectedSaleBy;
+                        });
+                      },
                     ),
                   ],
                 ),
@@ -604,13 +582,10 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                     backgroundColor: const Color(0xFF6B8E7F),
                   ),
                   onPressed: () {
-                    if (_customerNameController.text.isEmpty ||
-                        _customerAddressController.text.isEmpty) {
+                    if (_customerNameController.text.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text(
-                            'Please fill customer name and address',
-                          ),
+                          content: Text('Please fill customer name'),
                           backgroundColor: Colors.red,
                         ),
                       );
