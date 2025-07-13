@@ -43,7 +43,9 @@ def get_next_estimate_number():
             }
         ]
         
-        result = list(estimates_collection.aggregate(pipeline))  # type: ignore
+        # Execute aggregation and convert to list
+        cursor = estimates_collection.aggregate(pipeline)
+        result = list(cursor)
         
         if result:
             # Extract the number from the highest estimate number
@@ -104,18 +106,24 @@ def create_estimate(estimate_data: EstimateCreate):
         
         if result.inserted_id:
             # Notify all WebSocket clients of the update
-            asyncio.create_task(websocket_manager.broadcast_update({
-                "type": "estimate",
-                "action": "create",
-                "id": estimate_dict["estimate_id"],
-                "data": {
-                    "estimate_id": estimate_dict["estimate_id"],
-                    "estimate_number": estimate_dict["estimate_number"],
-                    "customer_name": estimate_dict["customer_name"],
-                    "total": estimate_dict["total"],
-                    "created_at": estimate_dict["created_at"].isoformat()
-                }
-            }))
+            try:
+                import asyncio
+                asyncio.create_task(websocket_manager.broadcast_update({
+                    "type": "estimate",
+                    "action": "create",
+                    "id": estimate_dict["estimate_id"],
+                    "data": {
+                        "estimate_id": estimate_dict["estimate_id"],
+                        "estimate_number": estimate_dict["estimate_number"],
+                        "customer_name": estimate_dict["customer_name"],
+                        "total": estimate_dict["total"],
+                        "created_at": estimate_dict["created_at"].isoformat()
+                    }
+                }))
+            except Exception as ws_error:
+                print(f"⚠️ WebSocket notification failed: {ws_error}")
+                # Continue even if WebSocket fails
+            
             return {
                 "success": True,
                 "message": "Estimate created successfully!",
@@ -142,13 +150,13 @@ def create_estimate(estimate_data: EstimateCreate):
         )
 
 @router.get("/all")
-async def get_all_estimates():
+def get_all_estimates():
     """Get all estimates with conversion status"""
     try:
         db = get_database()
         estimates_collection = db.estimates
         
-        estimates = await estimates_collection.find().sort("created_at", -1).to_list(length=None)  # type: ignore
+        estimates = list(estimates_collection.find().sort("created_at", -1))
         
         # Convert ObjectId to string for each estimate and add conversion status
         for estimate in estimates:
@@ -172,13 +180,13 @@ async def get_all_estimates():
         )
 
 @router.get("/number/{estimate_number}")
-async def get_estimate_by_number(estimate_number: str):
+def get_estimate_by_number(estimate_number: str):
     """Get estimate by estimate number (e.g., #001)"""
     try:
         db = get_database()
         estimates_collection = db.estimates
         
-        estimate = await estimates_collection.find_one({"estimate_number": estimate_number})  # type: ignore
+        estimate = estimates_collection.find_one({"estimate_number": estimate_number})
         
         if not estimate:
             raise HTTPException(
@@ -208,13 +216,13 @@ async def get_estimate_by_number(estimate_number: str):
         )
 
 @router.get("/{estimate_id}")
-async def get_estimate_by_id(estimate_id: str):
+def get_estimate_by_id(estimate_id: str):
     """Get estimate by ID"""
     try:
         db = get_database()
         estimates_collection = db.estimates
         
-        estimate = await estimates_collection.find_one({"estimate_id": estimate_id})  # type: ignore
+        estimate = estimates_collection.find_one({"estimate_id": estimate_id})
         
         if not estimate:
             raise HTTPException(
@@ -376,15 +384,15 @@ def convert_estimate_to_order(estimate_id: str, payment_mode: str = "Cash", sale
         )
 
 @router.get("/converted")
-async def get_converted_estimates():
+def get_converted_estimates():
     """Get all estimates that have been converted to orders"""
     try:
         db = get_database()
         estimates_collection = db.estimates
         
-        estimates = await estimates_collection.find({  # type: ignore
+        estimates = list(estimates_collection.find({
             "is_converted_to_order": True
-        }).sort("created_at", -1).to_list(length=None)
+        }).sort("created_at", -1))
         
         # Convert ObjectId to string for each estimate
         for estimate in estimates:
@@ -400,25 +408,20 @@ async def get_converted_estimates():
         )
 
 @router.get("/pending")
-async def get_pending_estimates():
+def get_pending_estimates():
     """Get all estimates that have not been converted to orders"""
     try:
         db = get_database()
         estimates_collection = db.estimates
         
-        estimates = await estimates_collection.find({  # type: ignore
+        estimates = list(estimates_collection.find({
             "is_converted_to_order": {"$ne": True}
-        }).sort("created_at", -1).to_list(length=None)
+        }).sort("created_at", -1))
         
         # Convert ObjectId to string for each estimate
         for estimate in estimates:
             estimate["id"] = str(estimate["_id"])
             del estimate["_id"]
-            
-            # Ensure conversion status is set
-            estimate["is_converted_to_order"] = False
-            estimate["linked_order_id"] = None
-            estimate["linked_order_number"] = None
         
         return estimates
         
