@@ -423,50 +423,7 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                 ),
                 onPressed: () async {
                   Navigator.of(context).pop();
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder:
-                        (context) => const AlertDialog(
-                          backgroundColor: Color(0xFF1A1A1A),
-                          content: Row(
-                            children: [
-                              CircularProgressIndicator(
-                                color: Color(0xFF6B8E7F),
-                              ),
-                              SizedBox(width: 16),
-                              Text(
-                                'Converting to order...',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                            ],
-                          ),
-                        ),
-                  );
-                  final result = await ApiService.convertEstimateToOrder(
-                    estimateId: estimate['estimate_id'] ?? estimate['id'],
-                    paymentMode: 'Cash', // Optionally prompt for payment mode
-                  );
-                  if (!mounted) return;
-                  Navigator.of(context).pop(); // Close loading dialog
-                  if (result['success'] == true) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Estimate converted to order!'),
-                        backgroundColor: Color(0xFF6B8E7F),
-                      ),
-                    );
-                    _fetchEstimates();
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Failed to convert: ${result['message'] ?? 'Unknown error'}',
-                        ),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
+                  _showConvertToOrderDialog(estimate);
                 },
                 icon: const Icon(Icons.swap_horiz, size: 18),
                 label: const Text('Convert to Order'),
@@ -652,5 +609,194 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
         ),
       );
     }
+  }
+
+  void _showConvertToOrderDialog(Map<String, dynamic> estimate) async {
+    final TextEditingController saleByController = TextEditingController(
+      text: estimate['sale_by'] ?? '',
+    );
+    String selectedPaymentMode = 'Cash';
+
+    final List<String> paymentModes = [
+      'Cash',
+      'Card',
+      'UPI',
+      'Bank Transfer',
+      'Cheque',
+      'Online Payment',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          title: const Text(
+            'Convert Estimate to Order',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: saleByController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Sale By',
+                    labelStyle: TextStyle(color: Colors.grey[400]),
+                    hintText: 'Enter sale by name',
+                    hintStyle: TextStyle(color: Colors.grey[600]),
+                    filled: true,
+                    fillColor: const Color(0xFF0D0D0D),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFF3A3A3A)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFF3A3A3A)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFF6B8E7F)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedPaymentMode,
+                  dropdownColor: const Color(0xFF0D0D0D),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Payment Mode',
+                    labelStyle: TextStyle(color: Colors.grey[400]),
+                    filled: true,
+                    fillColor: const Color(0xFF0D0D0D),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFF3A3A3A)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFF3A3A3A)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFF6B8E7F)),
+                    ),
+                  ),
+                  items:
+                      paymentModes.map((String mode) {
+                        return DropdownMenuItem<String>(
+                          value: mode,
+                          child: Text(
+                            mode,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        );
+                      }).toList(),
+                  onChanged: (String? newValue) {
+                    if (newValue != null) {
+                      selectedPaymentMode = newValue;
+                    }
+                  },
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6B8E7F),
+                  ),
+                  onPressed: () async {
+                    final saleBy = saleByController.text.trim();
+                    final paymentMode = selectedPaymentMode;
+
+                    if (saleBy.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Sale By cannot be empty.'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+                    if (paymentMode.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Payment Mode cannot be empty.'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+
+                    Navigator.of(context).pop(); // Close dialog
+
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder:
+                          (context) => const AlertDialog(
+                            backgroundColor: Color(0xFF1A1A1A),
+                            content: Row(
+                              children: [
+                                CircularProgressIndicator(
+                                  color: Color(0xFF6B8E7F),
+                                ),
+                                SizedBox(width: 16),
+                                Text(
+                                  'Converting to order...',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                              ],
+                            ),
+                          ),
+                    );
+
+                    final result = await ApiService.convertEstimateToOrder(
+                      estimateId: estimate['estimate_id'] ?? estimate['id'],
+                      saleBy: saleBy,
+                      paymentMode: paymentMode,
+                    );
+
+                    if (!mounted) return;
+                    Navigator.of(context).pop(); // Close loading dialog
+
+                    if (result['success'] == true) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Estimate converted to order!'),
+                          backgroundColor: Color(0xFF6B8E7F),
+                        ),
+                      );
+                      _fetchEstimates();
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Failed to convert: ${result['message'] ?? 'Unknown error'}',
+                          ),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.swap_horiz, size: 18),
+                  label: const Text('Convert to Order'),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }

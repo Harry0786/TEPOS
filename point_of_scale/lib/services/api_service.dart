@@ -578,11 +578,12 @@ class ApiService {
   // Convert estimate to order
   static Future<Map<String, dynamic>> convertEstimateToOrder({
     required String estimateId,
+    required String saleBy,
     String paymentMode = "Cash",
   }) async {
     return _retryRequest(() async {
       final url = Uri.parse(
-        '$baseUrl/estimates/$estimateId/convert-to-order?payment_mode=$paymentMode',
+        '$baseUrl/estimates/$estimateId/convert-to-order?payment_mode=$paymentMode&sale_by=$saleBy',
       );
       print('🌐 Converting estimate to order: $url');
       final response = await http

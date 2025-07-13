@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 from models.estimate import EstimateCreate, EstimateResponse
 from database.database import get_database
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from bson import ObjectId
 import uuid
@@ -279,7 +279,7 @@ async def delete_estimate(estimate_id: str):
         )
 
 @router.post("/{estimate_id}/convert-to-order")
-async def convert_estimate_to_order(estimate_id: str, payment_mode: str = "Cash"):
+async def convert_estimate_to_order(estimate_id: str, payment_mode: str = "Cash", sale_by: Optional[str] = None):
     """Convert an estimate to an order"""
     try:
         db = get_database()
@@ -306,7 +306,7 @@ async def convert_estimate_to_order(estimate_id: str, payment_mode: str = "Cash"
             "customer_name": estimate["customer_name"],
             "customer_phone": estimate["customer_phone"],
             "customer_address": estimate["customer_address"],
-            "sale_by": estimate["sale_by"],
+            "sale_by": sale_by if sale_by else estimate["sale_by"],
             "items": estimate["items"],
             "subtotal": estimate["subtotal"],
             "discount_amount": estimate["discount_amount"],
