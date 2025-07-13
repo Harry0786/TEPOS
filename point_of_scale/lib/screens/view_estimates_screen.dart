@@ -20,6 +20,10 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
   String? _errorMessage;
   late WebSocketService _webSocketService;
 
+  // Dialog state management
+  bool _isConversionDialogShown = false;
+  Timer? _conversionTimeoutTimer;
+
   @override
   void initState() {
     super.initState();
@@ -212,8 +216,66 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
     });
   }
 
+  // Helper method to close conversion dialog
+  void _closeConversionDialog() {
+    print(
+      '🔍 Attempting to close conversion dialog. Dialog shown: $_isConversionDialogShown, Mounted: $mounted',
+    );
+    if (_isConversionDialogShown && mounted) {
+      try {
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+          print('✅ Conversion dialog closed successfully');
+        } else {
+          print('⚠️ Cannot pop dialog - no dialogs in stack');
+        }
+      } catch (dialogError) {
+        print('⚠️ Error closing conversion dialog: $dialogError');
+        // Try alternative method
+        try {
+          if (Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+            print('✅ Conversion dialog closed with alternative method');
+          }
+        } catch (altError) {
+          print('⚠️ Alternative dialog close also failed: $altError');
+        }
+      } finally {
+        setState(() {
+          _isConversionDialogShown = false;
+        });
+        _conversionTimeoutTimer?.cancel();
+        print('🔄 Dialog state reset to false');
+      }
+    } else {
+      print(
+        '⚠️ Dialog not shown or widget not mounted. Dialog shown: $_isConversionDialogShown, Mounted: $mounted',
+      );
+    }
+  }
+
+  // Force close dialog method for emergency situations
+  void _forceCloseConversionDialog() {
+    print('🚨 Force closing conversion dialog');
+    try {
+      // Try to close any open dialogs
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+        print('✅ Force closed dialog');
+      }
+    } catch (e) {
+      print('⚠️ Force close failed: $e');
+    } finally {
+      setState(() {
+        _isConversionDialogShown = false;
+      });
+      _conversionTimeoutTimer?.cancel();
+    }
+  }
+
   @override
   void dispose() {
+    _conversionTimeoutTimer?.cancel();
     _webSocketService.dispose();
     super.dispose();
   }
@@ -880,8 +942,16 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                         Navigator.of(context).pop(); // Close dialog
 
                         // Show loading dialog with better error handling
-                        bool dialogShown = false;
+                        if (_isConversionDialogShown) {
+                          print('⚠️ Conversion dialog already shown, skipping');
+                          return;
+                        }
+
                         try {
+                          setState(() {
+                            _isConversionDialogShown = true;
+                          });
+
                           showDialog(
                             context: context,
                             barrierDismissible: false,
@@ -902,31 +972,26 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                                   ),
                                 ),
                           );
-                          dialogShown = true;
                           print('✅ Loading dialog shown successfully');
 
                           // Set a safety timeout to close dialog if something goes wrong
-                          Timer(const Duration(seconds: 30), () {
-                            if (dialogShown && mounted) {
-                              try {
-                                if (Navigator.of(context).canPop()) {
-                                  Navigator.of(context).pop();
-                                  print(
-                                    '🕐 Loading dialog closed by safety timeout',
-                                  );
-                                }
-                              } catch (timeoutError) {
-                                print(
-                                  '⚠️ Safety timeout dialog close failed: $timeoutError',
-                                );
-                              }
-                            }
-                          });
+                          _conversionTimeoutTimer?.cancel();
+                          _conversionTimeoutTimer = Timer(
+                            const Duration(seconds: 30),
+                            () {
+                              print(
+                                '🕐 Safety timeout triggered - force closing dialog',
+                              );
+                              _forceCloseConversionDialog();
+                            },
+                          );
                         } catch (dialogError) {
                           print(
                             '⚠️ Error showing loading dialog: $dialogError',
                           );
-                          dialogShown = false;
+                          setState(() {
+                            _isConversionDialogShown = false;
+                          });
                         }
 
                         try {
@@ -965,35 +1030,7 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                           }
 
                           // Safely close loading dialog
-                          if (dialogShown && mounted) {
-                            try {
-                              Navigator.of(
-                                context,
-                              ).pop(); // Close loading dialog
-                              print('✅ Loading dialog closed successfully');
-                            } catch (dialogError) {
-                              print(
-                                '⚠️ Error closing loading dialog: $dialogError',
-                              );
-                              // Try alternative method to close dialog
-                              try {
-                                if (Navigator.of(context).canPop()) {
-                                  Navigator.of(context).pop();
-                                  print(
-                                    '✅ Loading dialog closed with alternative method',
-                                  );
-                                }
-                              } catch (altError) {
-                                print(
-                                  '⚠️ Alternative dialog close also failed: $altError',
-                                );
-                              }
-                            }
-                          } else {
-                            print(
-                              '⚠️ Dialog not shown or widget not mounted, skipping close',
-                            );
-                          }
+                          _closeConversionDialog();
 
                           if (result['success'] == true) {
                             print('🎉 Order created successfully!');
@@ -1056,35 +1093,7 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                           }
 
                           // Safely close loading dialog after error
-                          if (dialogShown && mounted) {
-                            try {
-                              Navigator.of(
-                                context,
-                              ).pop(); // Close loading dialog
-                              print('✅ Loading dialog closed after error');
-                            } catch (dialogError) {
-                              print(
-                                '⚠️ Error closing loading dialog after error: $dialogError',
-                              );
-                              // Try alternative method to close dialog
-                              try {
-                                if (Navigator.of(context).canPop()) {
-                                  Navigator.of(context).pop();
-                                  print(
-                                    '✅ Loading dialog closed with alternative method after error',
-                                  );
-                                }
-                              } catch (altError) {
-                                print(
-                                  '⚠️ Alternative dialog close also failed after error: $altError',
-                                );
-                              }
-                            }
-                          } else {
-                            print(
-                              '⚠️ Dialog not shown or widget not mounted, skipping close after error',
-                            );
-                          }
+                          _closeConversionDialog();
 
                           // Safely show error message
                           try {
