@@ -91,7 +91,10 @@ class WebSocketService {
 
       _channel!.stream.listen(
         (message) {
-          _handleMessage(message.toString());
+          // Check if service is still active before handling message
+          if (_isConnected && _messageController?.isClosed == false) {
+            _handleMessage(message.toString());
+          }
         },
         onError: (error) {
           print('❌ WebSocket error: $error');
@@ -133,30 +136,40 @@ class WebSocketService {
     // Debounce the message emission
     _debounceTimer = Timer(_debounceDelay, () {
       try {
-        // Try to parse as structured message
-        final wsMessage = WebSocketMessage.fromString(message);
+        // Check if controllers are still active before adding events
+        if (_messageController?.isClosed == false &&
+            _legacyMessageController?.isClosed == false) {
+          // Try to parse as structured message
+          final wsMessage = WebSocketMessage.fromString(message);
 
-        if (wsMessage.isLegacy) {
-          // Handle legacy string messages
-          _legacyMessageController?.add(message);
+          if (wsMessage.isLegacy) {
+            // Handle legacy string messages
+            _legacyMessageController?.add(message);
+          } else {
+            // Handle structured messages
+            _messageController?.add(wsMessage);
+          }
         } else {
-          // Handle structured messages
-          _messageController?.add(wsMessage);
+          print(
+            '⚠️ WebSocket controllers are closed, skipping message: $message',
+          );
         }
       } catch (e) {
         print('❌ Error parsing WebSocket message: $e');
-        // Fallback to legacy handling
-        _legacyMessageController?.add(message);
+        // Fallback to legacy handling only if controller is still active
+        if (_legacyMessageController?.isClosed == false) {
+          _legacyMessageController?.add(message);
+        }
       }
     });
   }
 
   void disconnect() {
     print('🔌 Disconnecting WebSocket');
+    _isConnected = false; // Set this first to prevent new messages
     _reconnectTimer?.cancel();
     _debounceTimer?.cancel();
     _channel?.sink.close(status.goingAway);
-    _isConnected = false;
   }
 
   void _scheduleReconnect() {
@@ -172,8 +185,28 @@ class WebSocketService {
   }
 
   void dispose() {
+    print('🔌 Disposing WebSocket service');
     disconnect();
-    _messageController?.close();
-    _legacyMessageController?.close();
+
+    // Cancel timers first
+    _reconnectTimer?.cancel();
+    _debounceTimer?.cancel();
+
+    // Close controllers safely
+    try {
+      if (_messageController?.isClosed == false) {
+        _messageController?.close();
+      }
+      if (_legacyMessageController?.isClosed == false) {
+        _legacyMessageController?.close();
+      }
+    } catch (e) {
+      print('⚠️ Error closing WebSocket controllers: $e');
+    }
+
+    // Clear references
+    _messageController = null;
+    _legacyMessageController = null;
+    _channel = null;
   }
 }
