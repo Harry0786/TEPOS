@@ -5,8 +5,8 @@
     "websocket_url": "wss://pos-2wc9.onrender.com/ws"
   },
   "backend": {
-    "mongodb_url": "mongodb+srv://jayes:jayes123@cluster0.mongodb.net",
-    "database_name": "pos_system",
+    "mongodb_url": "mongodb+srv://jayesh:jayesh@cluster0.xvxk1fu.mongodb.net/",
+    "database_name": "pos",
     "cors_origins": [
       "https://pos-2wc9.onrender.com"
     ],
