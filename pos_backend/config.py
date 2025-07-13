@@ -5,9 +5,9 @@ class Config:
     """Production configuration for POS backend - Render only"""
     
     # ===== PRODUCTION CONFIGURATION =====
-    # MongoDB settings (Render)
-    MONGODB_URL = "mongodb+srv://jayes:jayes123@cluster0.mongodb.net"
-    DATABASE_NAME = "pos_system"
+    # MongoDB settings (Render) - Use environment variable if available
+    MONGODB_URL = os.getenv("MONGODB_URL", "mongodb+srv://jayesh:jayesh@cluster0.xvxk1fu.mongodb.net/pos?retryWrites=true&w=majority")
+    DATABASE_NAME = os.getenv("DATABASE_NAME", "pos")
     
     # CORS origins (Production)
     CORS_ORIGINS = [

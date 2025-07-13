@@ -24,7 +24,11 @@ async def connect_to_mongo():
         
         mongodb.client = AsyncIOMotorClient(
             mongodb_url,
-            serverSelectionTimeoutMS=5000
+            serverSelectionTimeoutMS=10000,
+            connectTimeoutMS=10000,
+            socketTimeoutMS=10000,
+            maxPoolSize=10,
+            minPoolSize=1
         )
         mongodb.database = mongodb.client.get_database(database_name)
         
