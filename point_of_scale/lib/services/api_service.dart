@@ -326,6 +326,467 @@ class ApiService {
     });
   }
 
+  // Reports API Methods
+  static Future<Map<String, dynamic>?> fetchTodayReport() async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/reports/today'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print('❌ Error fetching today\'s report: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Exception fetching today\'s report: $e');
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> fetchDateRangeReport(
+    String startDate,
+    String endDate,
+  ) async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.get(
+        Uri.parse(
+          '$baseUrl/reports/date-range?start_date=$startDate&end_date=$endDate',
+        ),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print('❌ Error fetching date range report: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Exception fetching date range report: $e');
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> fetchMonthlyReport(
+    int year,
+    int month,
+  ) async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/reports/monthly/$year/$month'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print('❌ Error fetching monthly report: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Exception fetching monthly report: $e');
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> fetchStaffPerformanceReport() async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/reports/staff-performance'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print(
+          '❌ Error fetching staff performance report: ${response.statusCode}',
+        );
+        return null;
+      }
+    } catch (e) {
+      print('❌ Exception fetching staff performance report: $e');
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> fetchEstimatesOnlyReport() async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/reports/estimates-only'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print('❌ Error fetching estimates report: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Exception fetching estimates report: $e');
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> fetchOrdersOnlyReport() async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/reports/orders-only'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print('❌ Error fetching orders report: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Exception fetching orders report: $e');
+      return null;
+    }
+  }
+
+  // Estimate Management API Methods
+  static Future<List<Map<String, dynamic>>?> fetchAllEstimates() async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/estimates/all'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        print('❌ Error fetching estimates: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Exception fetching estimates: $e');
+      return null;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>?> fetchPendingEstimates() async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/estimates/pending'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        print('❌ Error fetching pending estimates: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Exception fetching pending estimates: $e');
+      return null;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>?> fetchConvertedEstimates() async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/estimates/converted'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        print('❌ Error fetching converted estimates: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Exception fetching converted estimates: $e');
+      return null;
+    }
+  }
+
+  static Future<bool> deleteEstimate(String estimateId) async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.delete(
+        Uri.parse('$baseUrl/estimates/$estimateId'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        print('❌ Error deleting estimate: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Exception deleting estimate: $e');
+      return false;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> convertEstimateToOrder(
+    String estimateId,
+    String paymentMode,
+  ) async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.post(
+        Uri.parse(
+          '$baseUrl/estimates/$estimateId/convert-to-order?payment_mode=$paymentMode',
+        ),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print('❌ Error converting estimate to order: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Exception converting estimate to order: $e');
+      return null;
+    }
+  }
+
+  // Customer Management API Methods
+  static Future<List<Map<String, dynamic>>?> fetchCustomers() async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/customers/all'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        print('❌ Error fetching customers: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Exception fetching customers: $e');
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> createCustomer(
+    Map<String, dynamic> customerData,
+  ) async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/customers/create'),
+        headers: headers,
+        body: jsonEncode(customerData),
+      );
+
+      if (response.statusCode == 201) {
+        return jsonDecode(response.body);
+      } else {
+        print('❌ Error creating customer: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Exception creating customer: $e');
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> updateCustomer(
+    String customerId,
+    Map<String, dynamic> customerData,
+  ) async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/customers/$customerId'),
+        headers: headers,
+        body: jsonEncode(customerData),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print('❌ Error updating customer: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Exception updating customer: $e');
+      return null;
+    }
+  }
+
+  static Future<bool> deleteCustomer(String customerId) async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.delete(
+        Uri.parse('$baseUrl/customers/$customerId'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        print('❌ Error deleting customer: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Exception deleting customer: $e');
+      return false;
+    }
+  }
+
+  // Settings API Methods
+  static Future<Map<String, dynamic>?> fetchSettings() async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/settings'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print('❌ Error fetching settings: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Exception fetching settings: $e');
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> updateSettings(
+    Map<String, dynamic> settingsData,
+  ) async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/settings'),
+        headers: headers,
+        body: jsonEncode(settingsData),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        print('❌ Error updating settings: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Exception updating settings: $e');
+      return null;
+    }
+  }
+
+  // Health Check
+  static Future<bool> checkServerHealth() async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/health'),
+        headers: headers,
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print('❌ Exception checking server health: $e');
+      return false;
+    }
+  }
+
   // Retry logic for failed requests
   static Future<T> _retryRequest<T>(Future<T> Function() request) async {
     int attempts = 0;

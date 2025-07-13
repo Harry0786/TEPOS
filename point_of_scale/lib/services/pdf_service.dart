@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
@@ -710,6 +711,455 @@ class PdfService {
           ),
         ),
       ],
+    );
+  }
+
+  // Report PDF Generation
+  static Future<Uint8List> generateReportPdf(
+    String reportType,
+    Map<String, dynamic> reportData,
+  ) async {
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // Header
+              pw.Container(
+                width: double.infinity,
+                padding: const pw.EdgeInsets.all(20),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border(
+                    bottom: pw.BorderSide(color: PdfColors.grey300, width: 1),
+                  ),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'TIRUPATI ELECTRICALS',
+                      style: pw.TextStyle(
+                        fontSize: 24,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.green,
+                      ),
+                    ),
+                    pw.SizedBox(height: 8),
+                    pw.Text(
+                      reportType,
+                      style: pw.TextStyle(
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      'Generated on: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
+                      style: pw.TextStyle(
+                        fontSize: 12,
+                        color: PdfColors.grey600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              pw.SizedBox(height: 20),
+
+              // Summary Section
+              if (reportData['summary'] != null) ...[
+                pw.Text(
+                  'Summary',
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.black,
+                  ),
+                ),
+                pw.SizedBox(height: 10),
+                _buildReportSummaryTable(reportData['summary']),
+                pw.SizedBox(height: 20),
+              ],
+
+              // Statistics Section
+              if (reportData['statistics'] != null) ...[
+                pw.Text(
+                  'Statistics',
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.black,
+                  ),
+                ),
+                pw.SizedBox(height: 10),
+                _buildReportStatisticsTable(reportData['statistics']),
+                pw.SizedBox(height: 20),
+              ],
+
+              // Staff Performance Section
+              if (reportData['staff_performance'] != null) ...[
+                pw.Text(
+                  'Staff Performance',
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.black,
+                  ),
+                ),
+                pw.SizedBox(height: 10),
+                _buildReportStaffTable(reportData['staff_performance']),
+                pw.SizedBox(height: 20),
+              ],
+
+              // Recent Items Section
+              if (reportData['recent_items'] != null) ...[
+                pw.Text(
+                  'Recent Items',
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.black,
+                  ),
+                ),
+                pw.SizedBox(height: 10),
+                _buildReportRecentItemsTable(reportData['recent_items']),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+
+    return pdf.save();
+  }
+
+  static pw.Widget _buildReportSummaryTable(Map<String, dynamic> summary) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey300),
+        borderRadius: pw.BorderRadius.circular(8),
+      ),
+      child: pw.Column(
+        children: [
+          _buildReportSummaryRow(
+            'Total Sales',
+            'Rs. ${summary['total_sales']?.toStringAsFixed(0) ?? '0'}',
+          ),
+          _buildReportSummaryRow(
+            'Total Orders',
+            '${summary['total_orders'] ?? '0'}',
+          ),
+          _buildReportSummaryRow(
+            'Total Estimates',
+            '${summary['total_estimates'] ?? '0'}',
+          ),
+          _buildReportSummaryRow(
+            'Completed Sales',
+            '${summary['completed_sales'] ?? '0'}',
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildReportSummaryRow(String label, String value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 4),
+      child: pw.Row(
+        children: [
+          pw.Expanded(
+            flex: 2,
+            child: pw.Text(
+              label,
+              style: pw.TextStyle(
+                fontSize: 12,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.black,
+              ),
+            ),
+          ),
+          pw.Expanded(
+            flex: 1,
+            child: pw.Text(
+              value,
+              style: pw.TextStyle(
+                fontSize: 12,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.black,
+              ),
+              textAlign: pw.TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildReportStatisticsTable(
+    Map<String, dynamic> statistics,
+  ) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey300),
+        borderRadius: pw.BorderRadius.circular(8),
+      ),
+      child: pw.Column(
+        children:
+            statistics.entries
+                .map(
+                  (entry) => _buildReportSummaryRow(
+                    entry.key.replaceAll('_', ' ').toUpperCase(),
+                    entry.value.toString(),
+                  ),
+                )
+                .toList(),
+      ),
+    );
+  }
+
+  static pw.Widget _buildReportStaffTable(List<dynamic> staffPerformance) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey300),
+        borderRadius: pw.BorderRadius.circular(8),
+      ),
+      child: pw.Column(
+        children: [
+          // Header
+          pw.Container(
+            padding: const pw.EdgeInsets.symmetric(vertical: 8),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.grey200,
+              borderRadius: pw.BorderRadius.circular(4),
+            ),
+            child: pw.Row(
+              children: [
+                pw.Expanded(
+                  flex: 2,
+                  child: pw.Text(
+                    'Staff',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.black,
+                    ),
+                  ),
+                ),
+                pw.Expanded(
+                  flex: 1,
+                  child: pw.Text(
+                    'Sales',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.black,
+                    ),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                ),
+                pw.Expanded(
+                  flex: 1,
+                  child: pw.Text(
+                    'Amount',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.black,
+                    ),
+                    textAlign: pw.TextAlign.right,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Staff rows
+          ...staffPerformance
+              .map(
+                (staff) => pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                  child: pw.Row(
+                    children: [
+                      pw.Expanded(
+                        flex: 2,
+                        child: pw.Text(
+                          staff['staff_name'] ?? 'Unknown',
+                          style: pw.TextStyle(
+                            fontSize: 12,
+                            color: PdfColors.black,
+                          ),
+                        ),
+                      ),
+                      pw.Expanded(
+                        flex: 1,
+                        child: pw.Text(
+                          '${staff['total_sales'] ?? '0'}',
+                          style: pw.TextStyle(
+                            fontSize: 12,
+                            color: PdfColors.black,
+                          ),
+                          textAlign: pw.TextAlign.center,
+                        ),
+                      ),
+                      pw.Expanded(
+                        flex: 1,
+                        child: pw.Text(
+                          'Rs. ${(staff['total_amount'] ?? 0.0).toStringAsFixed(0)}',
+                          style: pw.TextStyle(
+                            fontSize: 12,
+                            color: PdfColors.black,
+                          ),
+                          textAlign: pw.TextAlign.right,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+              .toList(),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildReportRecentItemsTable(List<dynamic> recentItems) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey300),
+        borderRadius: pw.BorderRadius.circular(8),
+      ),
+      child: pw.Column(
+        children: [
+          // Header
+          pw.Container(
+            padding: const pw.EdgeInsets.symmetric(vertical: 8),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.grey200,
+              borderRadius: pw.BorderRadius.circular(4),
+            ),
+            child: pw.Row(
+              children: [
+                pw.Expanded(
+                  flex: 2,
+                  child: pw.Text(
+                    'Customer',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.black,
+                    ),
+                  ),
+                ),
+                pw.Expanded(
+                  flex: 1,
+                  child: pw.Text(
+                    'Amount',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.black,
+                    ),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                ),
+                pw.Expanded(
+                  flex: 1,
+                  child: pw.Text(
+                    'Status',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.black,
+                    ),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                ),
+                pw.Expanded(
+                  flex: 1,
+                  child: pw.Text(
+                    'Date',
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.black,
+                    ),
+                    textAlign: pw.TextAlign.right,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Item rows
+          ...recentItems
+              .take(10)
+              .map(
+                (item) => pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                  child: pw.Row(
+                    children: [
+                      pw.Expanded(
+                        flex: 2,
+                        child: pw.Text(
+                          item['customer_name'] ?? 'Unknown',
+                          style: pw.TextStyle(
+                            fontSize: 12,
+                            color: PdfColors.black,
+                          ),
+                        ),
+                      ),
+                      pw.Expanded(
+                        flex: 1,
+                        child: pw.Text(
+                          'Rs. ${(item['total'] ?? 0.0).toStringAsFixed(0)}',
+                          style: pw.TextStyle(
+                            fontSize: 12,
+                            color: PdfColors.black,
+                          ),
+                          textAlign: pw.TextAlign.center,
+                        ),
+                      ),
+                      pw.Expanded(
+                        flex: 1,
+                        child: pw.Text(
+                          item['status'] ?? 'Unknown',
+                          style: pw.TextStyle(
+                            fontSize: 12,
+                            color: PdfColors.black,
+                          ),
+                          textAlign: pw.TextAlign.center,
+                        ),
+                      ),
+                      pw.Expanded(
+                        flex: 1,
+                        child: pw.Text(
+                          DateFormat('MM/dd').format(
+                            DateTime.parse(
+                              item['created_at'] ??
+                                  DateTime.now().toIso8601String(),
+                            ),
+                          ),
+                          style: pw.TextStyle(
+                            fontSize: 12,
+                            color: PdfColors.black,
+                          ),
+                          textAlign: pw.TextAlign.right,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+              .toList(),
+        ],
+      ),
     );
   }
 }

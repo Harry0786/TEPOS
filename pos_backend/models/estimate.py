@@ -30,6 +30,9 @@ class EstimateResponse(BaseModel):
     discount_percentage: Optional[float] = None
     total: float
     created_at: datetime
+    linked_order_id: Optional[str] = None  # Link to order if converted
+    linked_order_number: Optional[str] = None  # Order number if converted
+    is_converted_to_order: bool = False  # Whether estimate has been converted to order
     
     class Config:
         populate_by_name = True

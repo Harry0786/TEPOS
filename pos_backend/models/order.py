@@ -15,6 +15,8 @@ class OrderCreate(BaseModel):
     total: float
     payment_mode: Optional[str] = "Cash"
     created_at: Optional[str] = None
+    source_estimate_id: Optional[str] = None  # If order was created from estimate
+    source_estimate_number: Optional[str] = None  # Estimate number if created from estimate
 
 class OrderResponse(BaseModel):
     id: str = Field(alias="_id")
@@ -33,6 +35,9 @@ class OrderResponse(BaseModel):
     payment_mode: str
     status: str = "Completed"
     created_at: datetime
+    source_estimate_id: Optional[str] = None  # If order was created from estimate
+    source_estimate_number: Optional[str] = None  # Estimate number if created from estimate
+    is_from_estimate: bool = False  # Whether order was created from estimate
     
     class Config:
         populate_by_name = True

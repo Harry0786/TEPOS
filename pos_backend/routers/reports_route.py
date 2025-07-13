@@ -42,9 +42,8 @@ async def get_today_report():
         # Calculate estimates statistics
         estimates_count = len(today_estimates)
         estimates_total = sum(estimate.get("total", 0) for estimate in today_estimates)
-        estimates_pending = len([e for e in today_estimates if e.get("status") == "Pending"])
-        estimates_accepted = len([e for e in today_estimates if e.get("status") == "Accepted"])
-        estimates_rejected = len([e for e in today_estimates if e.get("status") == "Rejected"])
+        estimates_converted = len([e for e in today_estimates if e.get("is_converted_to_order", False)])
+        estimates_pending = estimates_count - estimates_converted
         
         # Calculate orders statistics
         orders_count = len(today_orders)
@@ -68,10 +67,9 @@ async def get_today_report():
             "estimates": {
                 "count": estimates_count,
                 "total_amount": estimates_total,
-                "status_breakdown": {
+                "conversion_breakdown": {
                     "pending": estimates_pending,
-                    "accepted": estimates_accepted,
-                    "rejected": estimates_rejected
+                    "converted": estimates_converted
                 },
                 "items": today_estimates
             },
@@ -321,17 +319,22 @@ async def get_estimates_report():
         total_estimates = len(estimates)
         total_amount = sum(estimate.get("total", 0) for estimate in estimates)
         
-        # Status breakdown
-        status_counts = {}
+        # Conversion breakdown
+        conversion_counts = {
+            "converted": 0,
+            "pending": 0
+        }
         for estimate in estimates:
-            status = estimate.get("status", "Pending")
-            status_counts[status] = status_counts.get(status, 0) + 1
+            if estimate.get("is_converted_to_order", False):
+                conversion_counts["converted"] += 1
+            else:
+                conversion_counts["pending"] += 1
         
         return {
             "estimates": {
                 "total_count": total_estimates,
                 "total_amount": total_amount,
-                "status_breakdown": status_counts,
+                "conversion_breakdown": conversion_counts,
                 "items": estimates
             }
         }

@@ -7,8 +7,12 @@ import '../services/websocket_service.dart';
 import '../services/performance_service.dart';
 import '../services/pdf_service.dart';
 import 'view_orders_screen.dart';
+import 'reports_screen.dart';
+import 'customers_screen.dart';
+import 'settings_screen.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
+import 'package:flutter/services.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,7 +22,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen>
-    with AutomaticKeepAliveClientMixin {
+    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   List<Map<String, dynamic>> _orders = [];
   bool _isLoading = true;
   bool _isRefreshing = false;
@@ -32,6 +36,11 @@ class _HomeScreenState extends State<HomeScreen>
   bool _isConnected = false;
   String _connectionStatus = 'Connecting...';
   DateTime? _lastConnectionTime;
+
+  // Auto refresh timers
+  Timer? _autoRefreshTimer;
+  Timer? _periodicRefreshTimer;
+  DateTime? _lastAppResumeTime;
 
   // Computed values cache with lazy initialization
   double? _cachedTotalSales;
@@ -49,15 +58,58 @@ class _HomeScreenState extends State<HomeScreen>
   bool get wantKeepAlive => true;
 
   @override
+  void dispose() {
+    // Cancel timers
+    _autoRefreshTimer?.cancel();
+    _periodicRefreshTimer?.cancel();
+
+    // Dispose services
+    _webSocketService.dispose();
+    _performanceService.dispose();
+
+    // Remove observer
+    WidgetsBinding.instance.removeObserver(this);
+
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _onAppResumed();
+        break;
+      case AppLifecycleState.paused:
+        _onAppPaused();
+        break;
+      case AppLifecycleState.inactive:
+        _onAppInactive();
+        break;
+      case AppLifecycleState.detached:
+        _onAppDetached();
+        break;
+      case AppLifecycleState.hidden:
+        _onAppHidden();
+        break;
+    }
+  }
+
+  @override
   void initState() {
     super.initState();
     _performanceService.startOperation('HomeScreen.initState');
+
+    // Register for app lifecycle changes
+    WidgetsBinding.instance.addObserver(this);
 
     // Print current API configuration for debugging
     ApiService.printConfiguration();
 
     _initializeWebSocket();
     _loadOrders();
+    _setupAutoRefresh();
     _performanceService.endOperation('HomeScreen.initState');
   }
 
@@ -332,13 +384,6 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   @override
-  void dispose() {
-    _webSocketService.dispose();
-    _performanceService.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
 
@@ -348,7 +393,7 @@ class _HomeScreenState extends State<HomeScreen>
       backgroundColor: const Color(0xFF0A0A0A),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: _loadOrders,
+          onRefresh: _forceRefresh,
           color: const Color(0xFF6B8E7F),
           child:
               _isLoading
@@ -437,47 +482,73 @@ class _HomeScreenState extends State<HomeScreen>
               ],
             ),
           ),
-          // Status indicator
-          GestureDetector(
-            onTap: _showConnectionStatus,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color:
-                    _isConnected
-                        ? const Color(0xFF4CAF50).withOpacity(0.2)
-                        : const Color(0xFFFF5722).withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color:
-                          _isConnected
-                              ? const Color(0xFF4CAF50)
-                              : const Color(0xFFFF5722),
-                      shape: BoxShape.circle,
-                    ),
+          // Status indicator and refresh button
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Refresh button
+              GestureDetector(
+                onTap: _forceRefresh,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6B8E7F).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    _isConnected ? 'Online' : 'Offline',
-                    style: TextStyle(
-                      color:
-                          _isConnected
-                              ? const Color(0xFF4CAF50)
-                              : const Color(0xFFFF5722),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  child: Icon(
+                    _isRefreshing ? Icons.hourglass_empty : Icons.refresh,
+                    color: const Color(0xFF6B8E7F),
+                    size: 16,
                   ),
-                ],
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              // Connection status
+              GestureDetector(
+                onTap: _showConnectionStatus,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color:
+                        _isConnected
+                            ? const Color(0xFF4CAF50).withOpacity(0.2)
+                            : const Color(0xFFFF5722).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color:
+                              _isConnected
+                                  ? const Color(0xFF4CAF50)
+                                  : const Color(0xFFFF5722),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _isConnected ? 'Online' : 'Offline',
+                        style: TextStyle(
+                          color:
+                              _isConnected
+                                  ? const Color(0xFF4CAF50)
+                                  : const Color(0xFFFF5722),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -752,10 +823,10 @@ class _HomeScreenState extends State<HomeScreen>
                   Icons.analytics,
                   const Color(0xFF6B8E7F),
                   () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Reports - Coming Soon!'),
-                        backgroundColor: Color(0xFF6B8E7F),
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ReportsScreen(),
                       ),
                     );
                   },
@@ -765,10 +836,10 @@ class _HomeScreenState extends State<HomeScreen>
                   Icons.people,
                   const Color(0xFF6B8E7F),
                   () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Customers - Coming Soon!'),
-                        backgroundColor: Color(0xFF6B8E7F),
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const CustomersScreen(),
                       ),
                     );
                   },
@@ -778,10 +849,10 @@ class _HomeScreenState extends State<HomeScreen>
                   Icons.settings,
                   const Color(0xFF6B8E7F),
                   () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Settings - Coming Soon!'),
-                        backgroundColor: Color(0xFF6B8E7F),
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SettingsScreen(),
                       ),
                     );
                   },
@@ -1211,6 +1282,100 @@ class _HomeScreenState extends State<HomeScreen>
           );
         },
       );
+    }
+  }
+
+  // ===== AUTO REFRESH FUNCTIONALITY =====
+
+  void _setupAutoRefresh() {
+    // Set up periodic refresh every 30 seconds
+    _periodicRefreshTimer = Timer.periodic(const Duration(seconds: 30), (
+      timer,
+    ) {
+      if (mounted && !_isRefreshing) {
+        print('🔄 Auto-refreshing data...');
+        _loadOrders();
+      }
+    });
+
+    // Set up pull-to-refresh gesture
+    _setupPullToRefresh();
+  }
+
+  void _setupPullToRefresh() {
+    // This will be handled by the RefreshIndicator widget in the build method
+  }
+
+  void _onAppResumed() {
+    print('📱 App resumed - checking for updates...');
+    _lastAppResumeTime = DateTime.now();
+
+    // Check if it's been more than 1 minute since last refresh
+    if (_lastRefreshTime == null ||
+        DateTime.now().difference(_lastRefreshTime!).inMinutes >= 1) {
+      _loadOrders();
+    }
+
+    // Reconnect WebSocket if needed
+    if (!_webSocketService.isConnected) {
+      _webSocketService.connect();
+    }
+  }
+
+  void _onAppPaused() {
+    print('📱 App paused');
+    // Pause periodic refresh to save resources
+    _periodicRefreshTimer?.cancel();
+  }
+
+  void _onAppInactive() {
+    print('📱 App inactive');
+    // App is in background but not fully paused
+  }
+
+  void _onAppDetached() {
+    print('📱 App detached');
+    // App is being terminated
+  }
+
+  void _onAppHidden() {
+    print('📱 App hidden');
+    // App is hidden (e.g., by system UI)
+  }
+
+  Future<void> _forceRefresh() async {
+    print('🔄 Force refreshing data...');
+    _invalidateCache();
+    await _loadOrders();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Data refreshed successfully!'),
+          backgroundColor: Color(0xFF6B8E7F),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  void _checkForUpdates() async {
+    try {
+      // Check server health first
+      final isHealthy = await ApiService.checkServerHealth();
+      if (!isHealthy) {
+        print('⚠️ Server health check failed');
+        return;
+      }
+
+      // Check if there are any new orders/estimates
+      final currentOrders = await ApiService.fetchOrders();
+      if (currentOrders != null && currentOrders.length != _orders.length) {
+        print('🆕 New data detected - refreshing...');
+        _loadOrders();
+      }
+    } catch (e) {
+      print('❌ Error checking for updates: $e');
     }
   }
 }
