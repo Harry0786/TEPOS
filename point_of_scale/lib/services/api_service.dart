@@ -264,7 +264,7 @@ class ApiService {
     });
   }
 
-  // Fetch all orders (estimates + completed sales) from backend with caching
+  // Fetch all orders (completed sales only) from backend with caching
   static Future<List<Map<String, dynamic>>> fetchOrders() async {
     const cacheKey = 'orders';
 
@@ -275,17 +275,15 @@ class ApiService {
     }
 
     return _retryRequest(() async {
-      final url = Uri.parse('$baseUrl/orders/all');
+      final url = Uri.parse('$baseUrl/orders/orders-only');
       final response = await http.get(url).timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         List<Map<String, dynamic>> orders = [];
 
-        if (data is List) {
-          orders = List<Map<String, dynamic>>.from(data);
-        } else if (data['orders'] != null) {
-          orders = List<Map<String, dynamic>>.from(data['orders']);
+        if (data['orders'] != null && data['orders']['items'] != null) {
+          orders = List<Map<String, dynamic>>.from(data['orders']['items']);
         }
 
         // Cache the result

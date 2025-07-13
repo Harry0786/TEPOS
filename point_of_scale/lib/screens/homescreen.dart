@@ -24,6 +24,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen>
     with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   List<Map<String, dynamic>> _orders = [];
+  List<Map<String, dynamic>> _estimates = [];
   bool _isLoading = true;
   bool _isRefreshing = false;
   late WebSocketService _webSocketService;
@@ -108,7 +109,7 @@ class _HomeScreenState extends State<HomeScreen>
     ApiService.printConfiguration();
 
     _initializeWebSocket();
-    _loadOrders();
+    _loadData();
     _setupAutoRefresh();
     _performanceService.endOperation('HomeScreen.initState');
   }
@@ -135,16 +136,16 @@ class _HomeScreenState extends State<HomeScreen>
           message == 'order_updated' ||
           message == 'sale_completed') {
         if (mounted) {
-          _loadOrders();
+          _loadData();
         }
       }
     });
   }
 
-  Future<void> _loadOrders() async {
+  Future<void> _loadData() async {
     if (_isRefreshing) return;
 
-    _performanceService.startOperation('HomeScreen.loadOrders');
+    _performanceService.startOperation('HomeScreen.loadData');
 
     if (mounted) {
       setState(() {
@@ -153,10 +154,14 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     try {
+      // Fetch orders and estimates separately
       final orders = await ApiService.fetchOrders();
+      final estimates = await ApiService.fetchEstimates();
+
       if (mounted) {
         setState(() {
           _orders = orders ?? [];
+          _estimates = estimates ?? [];
           _isLoading = false;
           _isRefreshing = false;
           _lastRefreshTime = DateTime.now();
@@ -165,7 +170,7 @@ class _HomeScreenState extends State<HomeScreen>
         });
       }
     } catch (e) {
-      print('❌ Error loading orders: $e');
+      print('❌ Error loading data: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -173,14 +178,14 @@ class _HomeScreenState extends State<HomeScreen>
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to load orders: ${e.toString()}'),
+            content: Text('Failed to load data: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
       }
     }
 
-    _performanceService.endOperation('HomeScreen.loadOrders');
+    _performanceService.endOperation('HomeScreen.loadData');
   }
 
   void _invalidateCache() {
@@ -203,30 +208,36 @@ class _HomeScreenState extends State<HomeScreen>
     _performanceService.startOperation('HomeScreen.computeStats');
 
     double totalSales = 0.0;
-    int totalOrders = _orders.length;
-    int totalEstimates = 0;
+    int totalOrders = 0;
+    int totalEstimates = _estimates.length;
     int completedSales = 0;
 
     try {
+      // Process orders (only completed sales count as orders)
       for (final order in _orders) {
         final status = order['status']?.toString().toLowerCase() ?? '';
 
         if (status == 'completed') {
           completedSales++;
+          totalOrders++;
           final amount = order['amount'];
           final total = order['total'];
           final value = (amount ?? total ?? 0.0);
           totalSales += (value is num ? value.toDouble() : 0.0);
-        } else if (status == 'estimate' || status == 'pending') {
-          totalEstimates++;
         }
+      }
+
+      // Process estimates (count all estimates)
+      for (final estimate in _estimates) {
+        final status = estimate['status']?.toString().toLowerCase() ?? '';
+        // Estimates are counted separately, not as orders
       }
     } catch (e) {
       print('❌ Error computing order stats: $e');
       // Use safe defaults
       totalSales = 0.0;
-      totalOrders = _orders.length;
-      totalEstimates = 0;
+      totalOrders = 0;
+      totalEstimates = _estimates.length;
       completedSales = 0;
     }
 
@@ -256,20 +267,41 @@ class _HomeScreenState extends State<HomeScreen>
     _performanceService.startOperation('HomeScreen.computeRecentOrders');
 
     try {
-      // Use a more efficient sorting approach
-      final sorted = List<Map<String, dynamic>>.from(_orders);
-      sorted.sort((a, b) {
+      // Combine orders and estimates for recent display
+      final allItems = <Map<String, dynamic>>[];
+
+      // Add orders with type indicator
+      for (final order in _orders) {
+        allItems.add({
+          ...order,
+          'type': 'order',
+          'display_id':
+              order['sale_number'] ?? order['order_id'] ?? order['id'],
+        });
+      }
+
+      // Add estimates with type indicator
+      for (final estimate in _estimates) {
+        allItems.add({
+          ...estimate,
+          'type': 'estimate',
+          'display_id': estimate['estimate_number'] ?? estimate['id'],
+        });
+      }
+
+      // Sort by creation date
+      allItems.sort((a, b) {
         try {
           final aDate = _parseDate(a['created_at']);
           final bDate = _parseDate(b['created_at']);
           return bDate.compareTo(aDate);
         } catch (e) {
-          print('❌ Error sorting orders: $e');
+          print('❌ Error sorting items: $e');
           return 0;
         }
       });
 
-      _cachedRecentOrders = sorted.take(5).toList();
+      _cachedRecentOrders = allItems.take(5).toList();
     } catch (e) {
       print('❌ Error computing recent orders: $e');
       _cachedRecentOrders = [];
@@ -933,16 +965,18 @@ class _HomeScreenState extends State<HomeScreen>
     return widget;
   }
 
-  Widget _buildOrderItem(Map<String, dynamic> order) {
-    final bool isLast =
-        _recentOrders.indexOf(order) == _recentOrders.length - 1;
+  Widget _buildOrderItem(Map<String, dynamic> item) {
+    final bool isLast = _recentOrders.indexOf(item) == _recentOrders.length - 1;
     final int itemCount =
-        (order['items'] is List)
-            ? order['items'].length
-            : (order['items_count'] ?? 0);
+        (item['items'] is List)
+            ? item['items'].length
+            : (item['items_count'] ?? 0);
+
+    final bool isOrder = item['type'] == 'order';
+    final bool isCompleted = item['status'] == 'Completed';
 
     return GestureDetector(
-      onTap: () => _showOrderDetails(order),
+      onTap: () => _showOrderDetails(item),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -960,17 +994,15 @@ class _HomeScreenState extends State<HomeScreen>
               height: 36,
               decoration: BoxDecoration(
                 color:
-                    order['status'] == 'Completed'
+                    isOrder && isCompleted
                         ? const Color(0xFF4CAF50).withOpacity(0.2)
                         : const Color(0xFFFF9800).withOpacity(0.2),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
-                order['status'] == 'Completed'
-                    ? Icons.check_circle
-                    : Icons.description,
+                isOrder && isCompleted ? Icons.check_circle : Icons.description,
                 color:
-                    order['status'] == 'Completed'
+                    isOrder && isCompleted
                         ? const Color(0xFF4CAF50)
                         : const Color(0xFFFF9800),
                 size: 18,
@@ -982,7 +1014,7 @@ class _HomeScreenState extends State<HomeScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    order['id'] ?? order['estimate_number'] ?? '',
+                    item['display_id'] ?? '',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,
@@ -991,11 +1023,11 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    order['customer'] ?? order['customer_name'] ?? '',
+                    item['customer_name'] ?? item['customer'] ?? '',
                     style: TextStyle(color: Colors.grey[400], fontSize: 12),
                   ),
                   Text(
-                    ' ${itemCount} items',
+                    '${itemCount} items',
                     style: TextStyle(color: Colors.grey[500], fontSize: 10),
                   ),
                 ],
@@ -1005,7 +1037,7 @@ class _HomeScreenState extends State<HomeScreen>
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  ' Rs.  ${((order['amount'] ?? order['total'] ?? 0.0).toStringAsFixed(0))}',
+                  'Rs. ${((item['amount'] ?? item['total'] ?? 0.0).toStringAsFixed(0))}',
                   style: const TextStyle(
                     color: Color(0xFF6B8E7F),
                     fontSize: 14,
@@ -1014,8 +1046,8 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  (order['time'] ??
-                      (order['created_at']?.toString().split(' ')[0] ?? '')),
+                  (item['time'] ??
+                      (item['created_at']?.toString().split(' ')[0] ?? '')),
                   style: TextStyle(color: Colors.grey[400], fontSize: 11),
                 ),
                 Container(
@@ -1025,16 +1057,18 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                   decoration: BoxDecoration(
                     color:
-                        order['status'] == 'Completed'
+                        isOrder && isCompleted
                             ? const Color(0xFF4CAF50).withOpacity(0.2)
                             : const Color(0xFFFF9800).withOpacity(0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    order['status'],
+                    isOrder
+                        ? (isCompleted ? 'Completed' : 'Order')
+                        : 'Estimate',
                     style: TextStyle(
                       color:
-                          order['status'] == 'Completed'
+                          isOrder && isCompleted
                               ? const Color(0xFF4CAF50)
                               : const Color(0xFFFF9800),
                       fontSize: 9,
@@ -1050,13 +1084,9 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  void _showOrderDetails(Map<String, dynamic> order) {
-    final bool isOrder =
-        order['type'] == 'order' || order['status'] == 'Completed';
-    final String orderNumber =
-        isOrder
-            ? (order['sale_number'] ?? order['order_id'] ?? 'Unknown')
-            : (order['estimate_number'] ?? order['estimate_id'] ?? 'Unknown');
+  void _showOrderDetails(Map<String, dynamic> item) {
+    final bool isOrder = item['type'] == 'order';
+    final String itemNumber = item['display_id'] ?? 'Unknown';
 
     showDialog(
       context: context,
@@ -1074,7 +1104,7 @@ class _HomeScreenState extends State<HomeScreen>
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '${isOrder ? 'Order' : 'Estimate'} $orderNumber',
+                  '${isOrder ? 'Order' : 'Estimate'} $itemNumber',
                   style: const TextStyle(color: Colors.white),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -1086,16 +1116,17 @@ class _HomeScreenState extends State<HomeScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildDetailRow('Customer', order['customer_name'] ?? ''),
-                _buildDetailRow('Phone', order['customer_phone'] ?? ''),
-                _buildDetailRow('Address', order['customer_address'] ?? ''),
-                _buildDetailRow('Sale By', order['sale_by'] ?? ''),
-                _buildDetailRow('Status', order['status'] ?? ''),
-                if (isOrder && order['payment_mode'] != null)
-                  _buildDetailRow('Payment Mode', order['payment_mode'] ?? ''),
+                _buildDetailRow('Customer', item['customer_name'] ?? ''),
+                _buildDetailRow('Phone', item['customer_phone'] ?? ''),
+                _buildDetailRow('Address', item['customer_address'] ?? ''),
+                _buildDetailRow('Sale By', item['sale_by'] ?? ''),
+                _buildDetailRow(
+                  'Status',
+                  isOrder ? (item['status'] ?? '') : (item['status'] ?? ''),
+                ),
                 _buildDetailRow(
                   'Date',
-                  order['time'] ?? order['created_at'].toString().split(' ')[0],
+                  item['created_at'].toString().split(' ')[0],
                 ),
                 const SizedBox(height: 16),
                 const Text(
@@ -1107,7 +1138,7 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
                 const SizedBox(height: 8),
-                ...(order['items'] as List<dynamic>?)
+                ...(item['items'] as List<dynamic>?)
                         ?.map<Widget>(
                           (item) => Padding(
                             padding: const EdgeInsets.only(bottom: 4),
@@ -1135,18 +1166,18 @@ class _HomeScreenState extends State<HomeScreen>
                 const SizedBox(height: 8),
                 _buildDetailRow(
                   'Subtotal',
-                  'Rs. ${(order['subtotal'] ?? 0.0).toStringAsFixed(2)}',
+                  'Rs. ${(item['subtotal'] ?? 0.0).toStringAsFixed(2)}',
                 ),
-                if ((order['discount_amount'] ?? 0.0) > 0)
+                if ((item['discount_amount'] ?? 0.0) > 0)
                   _buildDetailRow(
                     'Discount',
-                    (order['is_percentage_discount'] ?? false)
-                        ? '${order['discount_amount']}%'
-                        : 'Rs. ${order['discount_amount'].toStringAsFixed(2)}',
+                    (item['is_percentage_discount'] ?? false)
+                        ? '${item['discount_amount']}%'
+                        : 'Rs. ${item['discount_amount'].toStringAsFixed(2)}',
                   ),
                 _buildDetailRow(
                   'Total',
-                  'Rs. ${(order['total'] ?? order['amount'] ?? 0.0).toStringAsFixed(2)}',
+                  'Rs. ${(item['total'] ?? item['amount'] ?? 0.0).toStringAsFixed(2)}',
                   isTotal: true,
                 ),
               ],
@@ -1164,7 +1195,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 onPressed: () {
                   Navigator.of(context).pop();
-                  _printOrderPdf(order);
+                  _printOrderPdf(item);
                 },
                 child: const Text('Print PDF'),
               ),
@@ -1294,7 +1325,7 @@ class _HomeScreenState extends State<HomeScreen>
     ) {
       if (mounted && !_isRefreshing) {
         print('🔄 Auto-refreshing data...');
-        _loadOrders();
+        _loadData();
       }
     });
 
@@ -1313,7 +1344,7 @@ class _HomeScreenState extends State<HomeScreen>
     // Check if it's been more than 1 minute since last refresh
     if (_lastRefreshTime == null ||
         DateTime.now().difference(_lastRefreshTime!).inMinutes >= 1) {
-      _loadOrders();
+      _loadData();
     }
 
     // Reconnect WebSocket if needed
@@ -1346,7 +1377,7 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _forceRefresh() async {
     print('🔄 Force refreshing data...');
     _invalidateCache();
-    await _loadOrders();
+    await _loadData();
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1372,7 +1403,7 @@ class _HomeScreenState extends State<HomeScreen>
       final currentOrders = await ApiService.fetchOrders();
       if (currentOrders != null && currentOrders.length != _orders.length) {
         print('🆕 New data detected - refreshing...');
-        _loadOrders();
+        _loadData();
       }
     } catch (e) {
       print('❌ Error checking for updates: $e');

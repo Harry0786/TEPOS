@@ -48,6 +48,7 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
   }
 
   Future<void> _loadEstimates() async {
+    if (_isLoading) return; // Prevent re-entrancy
     setState(() {
       _isLoading = true;
     });
@@ -498,10 +499,11 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                                                   BorderRadius.circular(12),
                                             ),
                                             child: Text(
-                                              estimate['status'],
+                                              estimate['status'] ?? 'Unknown',
                                               style: TextStyle(
                                                 color: _getStatusColor(
-                                                  estimate['status'],
+                                                  estimate['status'] ??
+                                                      'Unknown',
                                                 ),
                                                 fontSize: 11,
                                                 fontWeight: FontWeight.bold,

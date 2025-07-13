@@ -857,7 +857,10 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         total: _total,
       );
 
-      Navigator.of(context).pop(); // Close loading dialog
+      // Close loading dialog safely
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
 
       if (response['success']) {
         // Store the estimate number for display
@@ -866,39 +869,55 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         }
 
         // Generate PDF
-        final pdfFile = await PdfService.generateEstimatePdf(
-          estimateNumber:
-              response['estimate_number'] ??
-              'EST-${DateTime.now().millisecondsSinceEpoch}',
-          customerName: _customerNameController.text,
-          customerPhone: _customerWhatsAppController.text,
-          customerAddress: _customerAddressController.text,
-          saleBy: _selectedSaleBy,
-          items: _cartItems,
-          subtotal: _subtotal,
-          discountAmount: _discountAmount,
-          isPercentageDiscount: _isPercentageDiscount,
-          total: _total,
-          createdAt: DateTime.now(),
-        );
+        File? pdfFile;
+        try {
+          pdfFile = await PdfService.generateEstimatePdf(
+            estimateNumber:
+                response['estimate_number'] ??
+                'EST-${DateTime.now().millisecondsSinceEpoch}',
+            customerName: _customerNameController.text,
+            customerPhone: _customerWhatsAppController.text,
+            customerAddress: _customerAddressController.text,
+            saleBy: _selectedSaleBy,
+            items: _cartItems,
+            subtotal: _subtotal,
+            discountAmount: _discountAmount,
+            isPercentageDiscount: _isPercentageDiscount,
+            total: _total,
+            createdAt: DateTime.now(),
+          );
+        } catch (pdfError) {
+          print('PDF generation error: $pdfError');
+          // Continue without PDF if generation fails
+        }
 
         // Show success dialog with options
-        _showEstimateSuccessDialog(response, pdfFile);
+        if (mounted) {
+          _showEstimateSuccessDialog(response, pdfFile);
+        }
       } else {
         // Show error dialog
-        _showEstimateErrorDialog(
-          response['message'] ?? 'Failed to send estimate',
-        );
+        if (mounted) {
+          _showEstimateErrorDialog(
+            response['message'] ?? 'Failed to send estimate',
+          );
+        }
       }
     } catch (error) {
-      Navigator.of(context).pop(); // Close loading dialog
-      _showEstimateErrorDialog('An error occurred: ${error.toString()}');
+      // Close loading dialog safely
+      if (mounted) {
+        Navigator.of(context).pop();
+        _showEstimateErrorDialog('An error occurred: ${error.toString()}');
+      }
     }
 
     _performanceService.endOperation('NewSaleScreen.sendEstimate');
   }
 
-  void _showEstimateSuccessDialog(Map<String, dynamic> response, File pdfFile) {
+  void _showEstimateSuccessDialog(
+    Map<String, dynamic> response,
+    File? pdfFile,
+  ) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -947,30 +966,32 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
             ],
           ),
           actions: [
-            // Print Estimate button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _printEstimatePdf(pdfFile);
-                },
-                icon: const Icon(Icons.print, size: 18),
-                label: const Text('Print Estimate'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2196F3),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+            // Print Estimate button (only show if PDF was generated)
+            if (pdfFile != null) ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _printEstimatePdf(pdfFile);
+                  },
+                  icon: const Icon(Icons.print, size: 18),
+                  label: const Text('Print Estimate'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2196F3),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
+              const SizedBox(height: 8),
+            ],
             // Close button
             SizedBox(
               width: double.infinity,
@@ -1038,7 +1059,16 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     );
   }
 
-  void _printEstimatePdf(File pdfFile) async {
+  void _printEstimatePdf(File? pdfFile) async {
+    if (pdfFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No PDF file to print.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
     try {
       final bytes = await pdfFile.readAsBytes();
       await Printing.layoutPdf(onLayout: (format) async => bytes);
