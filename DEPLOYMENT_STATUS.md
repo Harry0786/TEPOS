@@ -33,6 +33,11 @@ Your TEPOS backend is now successfully deployed and running on Render!
 - **Added**: `/health` endpoint for monitoring
 - **Status**: ✅ Available at https://pos-2wc9.onrender.com/health
 
+### 4. Separate Reports System ✅
+- **Added**: Complete reporting system with separate order/estimate counts
+- **Status**: ✅ Available at https://pos-2wc9.onrender.com/api/reports/
+- **Features**: Today's report, monthly reports, staff performance, date range reports
+
 ## 📊 **Current Status**
 
 ### ✅ **Working Endpoints**
@@ -40,11 +45,21 @@ Your TEPOS backend is now successfully deployed and running on Render!
 - `GET /api/` - API status
 - `GET /health` - Health check
 - `GET /api/estimates/all` - Get all estimates
-- `GET /api/orders/all` - Get all orders
+- `GET /api/orders/all` - Get all orders (Legacy)
+- `GET /api/orders/separate` - Get orders and estimates separately (✅ New)
+- `GET /api/orders/orders-only` - Get only completed orders (✅ New)
 - `POST /api/estimates/create` - Create estimate
 - `POST /api/orders/create-sale` - Create sale
 - `PUT /api/orders/{id}/status` - Update order status (✅ Fixed)
 - `WebSocket /ws` - Real-time updates
+
+### 📊 **New Reporting Endpoints** (✅ Added)
+- `GET /api/reports/today` - Today's report with separate counts
+- `GET /api/reports/date-range` - Date range report
+- `GET /api/reports/monthly/{year}/{month}` - Monthly report
+- `GET /api/reports/staff-performance` - Staff performance report
+- `GET /api/reports/estimates-only` - Estimates-only report
+- `GET /api/reports/orders-only` - Orders-only report
 
 ### 🔍 **Test Results**
 - **MongoDB Connection**: ✅ Success

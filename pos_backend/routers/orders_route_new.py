@@ -128,7 +128,7 @@ async def create_completed_sale(order_data: OrderCreate):
 
 @router.get("/all")
 async def get_all_orders():
-    """Get all orders (estimates + completed sales)"""
+    """Get all orders (estimates + completed sales) - Legacy endpoint for compatibility"""
     try:
         db = get_database()
         estimates_collection = db.estimates
@@ -198,6 +198,80 @@ async def get_all_orders():
         all_orders.sort(key=lambda x: x["created_at"], reverse=True)
         
         return all_orders
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching orders: {str(e)}"
+        )
+
+@router.get("/separate")
+async def get_orders_and_estimates_separate():
+    """Get orders and estimates as separate lists"""
+    try:
+        db = get_database()
+        estimates_collection = db.estimates
+        orders_collection = db.orders
+        
+        # Get all estimates
+        estimates = await estimates_collection.find().sort("created_at", -1).to_list(length=None)
+        
+        # Get all completed orders
+        orders = await orders_collection.find().sort("created_at", -1).to_list(length=None)
+        
+        # Convert ObjectIds to strings
+        for estimate in estimates:
+            estimate["_id"] = str(estimate["_id"])
+        
+        for order in orders:
+            order["_id"] = str(order["_id"])
+        
+        return {
+            "estimates": {
+                "count": len(estimates),
+                "total_amount": sum(e.get("total", 0) for e in estimates),
+                "items": estimates
+            },
+            "orders": {
+                "count": len(orders),
+                "total_amount": sum(o.get("total", 0) for o in orders),
+                "items": orders
+            },
+            "summary": {
+                "total_estimates": len(estimates),
+                "total_orders": len(orders),
+                "total_transactions": len(estimates) + len(orders),
+                "total_revenue": sum(e.get("total", 0) for e in estimates) + sum(o.get("total", 0) for o in orders)
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching separate data: {str(e)}"
+        )
+
+@router.get("/orders-only")
+async def get_orders_only():
+    """Get only completed orders"""
+    try:
+        db = get_database()
+        orders_collection = db.orders
+        
+        # Get all completed orders
+        orders = await orders_collection.find().sort("created_at", -1).to_list(length=None)
+        
+        # Convert ObjectIds to strings
+        for order in orders:
+            order["_id"] = str(order["_id"])
+        
+        return {
+            "orders": {
+                "count": len(orders),
+                "total_amount": sum(o.get("total", 0) for o in orders),
+                "items": orders
+            }
+        }
         
     except Exception as e:
         raise HTTPException(
