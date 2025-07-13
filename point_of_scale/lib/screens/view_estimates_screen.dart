@@ -612,189 +612,332 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
   }
 
   void _showConvertToOrderDialog(Map<String, dynamic> estimate) async {
-    final TextEditingController saleByController = TextEditingController(
-      text: estimate['sale_by'] ?? '',
-    );
     String selectedPaymentMode = 'Cash';
+    String selectedSaleBy = estimate['sale_by'] ?? 'Rajesh Goyal';
 
-    final List<String> paymentModes = [
-      'Cash',
-      'Card',
-      'UPI',
-      'Bank Transfer',
-      'Cheque',
-      'Online Payment',
+    final List<String> saleByOptions = [
+      'Rajesh Goyal',
+      'Rupendra',
+      'Deepak',
+      'Major',
     ];
 
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1A1A1A),
-          title: const Text(
-            'Convert Estimate to Order',
-            style: TextStyle(color: Colors.white),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: saleByController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Sale By',
-                    labelStyle: TextStyle(color: Colors.grey[400]),
-                    hintText: 'Enter sale by name',
-                    hintStyle: TextStyle(color: Colors.grey[600]),
-                    filled: true,
-                    fillColor: const Color(0xFF0D0D0D),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFF3A3A3A)),
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1A1A1A),
+              title: const Text(
+                'Convert Estimate to Order',
+                style: TextStyle(color: Colors.white),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Sale By:',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFF3A3A3A)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFF6B8E7F)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: selectedPaymentMode,
-                  dropdownColor: const Color(0xFF0D0D0D),
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Payment Mode',
-                    labelStyle: TextStyle(color: Colors.grey[400]),
-                    filled: true,
-                    fillColor: const Color(0xFF0D0D0D),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFF3A3A3A)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFF3A3A3A)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFF6B8E7F)),
-                    ),
-                  ),
-                  items:
-                      paymentModes.map((String mode) {
-                        return DropdownMenuItem<String>(
-                          value: mode,
-                          child: Text(
-                            mode,
-                            style: const TextStyle(color: Colors.white),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0D0D0D),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF2A2A2A)),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: selectedSaleBy,
+                          dropdownColor: const Color(0xFF0D0D0D),
+                          style: const TextStyle(color: Colors.white),
+                          icon: const Icon(
+                            Icons.arrow_drop_down,
+                            color: Colors.grey,
                           ),
+                          onChanged: (String? newValue) {
+                            setDialogState(() {
+                              selectedSaleBy = newValue!;
+                            });
+                          },
+                          items:
+                              saleByOptions.map<DropdownMenuItem<String>>((
+                                String value,
+                              ) {
+                                return DropdownMenuItem<String>(
+                                  value: value,
+                                  child: Text(value),
+                                );
+                              }).toList(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Mode of Payment:',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Column(
+                      children: [
+                        RadioListTile<String>(
+                          title: const Text(
+                            'Cash',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                          value: 'Cash',
+                          groupValue: selectedPaymentMode,
+                          onChanged: (value) {
+                            setDialogState(() {
+                              selectedPaymentMode = value!;
+                            });
+                          },
+                          activeColor: const Color(0xFF6B8E7F),
+                        ),
+                        RadioListTile<String>(
+                          title: const Text(
+                            'UPI: Ragini Bandl',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                          value: 'UPI: Ragini Bandl',
+                          groupValue: selectedPaymentMode,
+                          onChanged: (value) {
+                            setDialogState(() {
+                              selectedPaymentMode = value!;
+                            });
+                          },
+                          activeColor: const Color(0xFF6B8E7F),
+                        ),
+                        RadioListTile<String>(
+                          title: const Text(
+                            'UPI: Rajesh Goyal',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                          value: 'UPI: Rajesh Goyal',
+                          groupValue: selectedPaymentMode,
+                          onChanged: (value) {
+                            setDialogState(() {
+                              selectedPaymentMode = value!;
+                            });
+                          },
+                          activeColor: const Color(0xFF6B8E7F),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6B8E7F),
+                      ),
+                      onPressed: () async {
+                        Navigator.of(context).pop(); // Close dialog
+
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder:
+                              (context) => const AlertDialog(
+                                backgroundColor: Color(0xFF1A1A1A),
+                                content: Row(
+                                  children: [
+                                    CircularProgressIndicator(
+                                      color: Color(0xFF6B8E7F),
+                                    ),
+                                    SizedBox(width: 16),
+                                    Text(
+                                      'Converting to order...',
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                                  ],
+                                ),
+                              ),
                         );
-                      }).toList(),
-                  onChanged: (String? newValue) {
-                    if (newValue != null) {
-                      selectedPaymentMode = newValue;
-                    }
-                  },
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6B8E7F),
-                  ),
-                  onPressed: () async {
-                    final saleBy = saleByController.text.trim();
-                    final paymentMode = selectedPaymentMode;
 
-                    if (saleBy.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Sale By cannot be empty.'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                      return;
-                    }
-                    if (paymentMode.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Payment Mode cannot be empty.'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                      return;
-                    }
+                        try {
+                          print('🔄 Starting estimate to order conversion...');
+                          print('📋 Estimate data: ${estimate.toString()}');
+                          print('👤 Sale By: $selectedSaleBy');
+                          print('💳 Payment Mode: $selectedPaymentMode');
 
-                    Navigator.of(context).pop(); // Close dialog
-
-                    showDialog(
-                      context: context,
-                      barrierDismissible: false,
-                      builder:
-                          (context) => const AlertDialog(
-                            backgroundColor: Color(0xFF1A1A1A),
-                            content: Row(
-                              children: [
-                                CircularProgressIndicator(
-                                  color: Color(0xFF6B8E7F),
-                                ),
-                                SizedBox(width: 16),
-                                Text(
-                                  'Converting to order...',
-                                  style: TextStyle(color: Colors.white),
-                                ),
-                              ],
+                          // Use the existing createCompletedSale function instead
+                          final result = await ApiService.createCompletedSale(
+                            customerName: estimate['customer_name'] ?? '',
+                            customerPhone: estimate['customer_phone'] ?? '',
+                            customerAddress: estimate['customer_address'] ?? '',
+                            saleBy: selectedSaleBy,
+                            items: List<Map<String, dynamic>>.from(
+                              estimate['items'] ?? [],
                             ),
-                          ),
-                    );
+                            subtotal: (estimate['subtotal'] ?? 0.0).toDouble(),
+                            discountAmount:
+                                (estimate['discount_amount'] ?? 0.0).toDouble(),
+                            isPercentageDiscount:
+                                estimate['is_percentage_discount'] ?? true,
+                            total: (estimate['total'] ?? 0.0).toDouble(),
+                            paymentMode: selectedPaymentMode,
+                          ).timeout(
+                            const Duration(seconds: 30),
+                            onTimeout: () {
+                              throw Exception(
+                                'Request timeout - please check your connection',
+                              );
+                            },
+                          );
 
-                    final result = await ApiService.convertEstimateToOrder(
-                      estimateId: estimate['estimate_id'] ?? estimate['id'],
-                      saleBy: saleBy,
-                      paymentMode: paymentMode,
-                    );
+                          print(
+                            '✅ API call completed. Result: ${result.toString()}',
+                          );
 
-                    if (!mounted) return;
-                    Navigator.of(context).pop(); // Close loading dialog
+                          // Check if widget is still mounted before proceeding
+                          if (!mounted) {
+                            print(
+                              '⚠️ Widget no longer mounted, stopping operation',
+                            );
+                            return;
+                          }
 
-                    if (result['success'] == true) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Estimate converted to order!'),
-                          backgroundColor: Color(0xFF6B8E7F),
-                        ),
-                      );
-                      _fetchEstimates();
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Failed to convert: ${result['message'] ?? 'Unknown error'}',
-                          ),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.swap_horiz, size: 18),
-                  label: const Text('Convert to Order'),
+                          // Safely close loading dialog
+                          try {
+                            Navigator.of(context).pop(); // Close loading dialog
+                            print('✅ Loading dialog closed successfully');
+                          } catch (dialogError) {
+                            print(
+                              '⚠️ Error closing loading dialog: $dialogError',
+                            );
+                            // Continue even if dialog close fails
+                          }
+
+                          if (result['success'] == true) {
+                            print('🎉 Order created successfully!');
+                            // Safely show success message
+                            try {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Estimate converted to order!',
+                                    ),
+                                    backgroundColor: Color(0xFF6B8E7F),
+                                  ),
+                                );
+                              }
+                            } catch (snackbarError) {
+                              print(
+                                '⚠️ Error showing success message: $snackbarError',
+                              );
+                            }
+
+                            // Delete the estimate after successful order creation
+                            try {
+                              print('🗑️ Deleting original estimate...');
+                              await ApiService.deleteEstimate(
+                                estimateId:
+                                    estimate['estimate_id'] ?? estimate['id'],
+                              );
+                              print('✅ Estimate deleted successfully');
+                            } catch (deleteError) {
+                              print(
+                                'Warning: Failed to delete estimate: $deleteError',
+                              );
+                              // Continue even if estimate deletion fails
+                            }
+                            print('🔄 Refreshing estimates list...');
+                            try {
+                              await _fetchEstimates();
+                              print('✅ Estimates list refreshed successfully');
+                            } catch (fetchError) {
+                              print(
+                                'Warning: Failed to refresh estimates list: $fetchError',
+                              );
+                              // Continue even if refresh fails
+                            }
+                          } else {
+                            print(
+                              '❌ Order creation failed: ${result['message']}',
+                            );
+                            // Safely show error message
+                            try {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Failed to convert: ${result['message'] ?? 'Unknown error'}',
+                                    ),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            } catch (snackbarError) {
+                              print(
+                                '⚠️ Error showing error message: $snackbarError',
+                              );
+                            }
+                          }
+                        } catch (e) {
+                          print('Error converting estimate to order: $e');
+                          print('🔍 Error details: ${e.toString()}');
+                          // Safely handle errors
+                          if (!mounted) {
+                            print(
+                              '⚠️ Widget no longer mounted during error handling',
+                            );
+                            return;
+                          }
+
+                          // Safely close loading dialog
+                          try {
+                            Navigator.of(context).pop(); // Close loading dialog
+                            print('✅ Loading dialog closed after error');
+                          } catch (dialogError) {
+                            print(
+                              '⚠️ Error closing loading dialog after error: $dialogError',
+                            );
+                          }
+
+                          // Safely show error message
+                          try {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Error: ${e.toString()}'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          } catch (snackbarError) {
+                            print(
+                              '⚠️ Error showing error snackbar: $snackbarError',
+                            );
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.swap_horiz, size: 18),
+                      label: const Text('Convert to Order'),
+                    ),
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );

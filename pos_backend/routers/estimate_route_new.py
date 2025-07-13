@@ -43,7 +43,7 @@ async def get_next_estimate_number():
             }
         ]
         
-        result = await estimates_collection.aggregate(pipeline).to_list(length=1)
+        result = await estimates_collection.aggregate(pipeline).to_list(length=1)  # type: ignore
         
         if result:
             # Extract the number from the highest estimate number
@@ -100,7 +100,7 @@ async def create_estimate(estimate_data: EstimateCreate):
                     estimate_dict["discount_percentage"] = 0.0
         
         # Insert into database
-        result = await estimates_collection.insert_one(estimate_dict)
+        result = await estimates_collection.insert_one(estimate_dict)  # type: ignore
         
         if result.inserted_id:
             # Notify all WebSocket clients of the update
@@ -137,7 +137,7 @@ async def get_all_estimates():
         db = get_database()
         estimates_collection = db.estimates
         
-        estimates = await estimates_collection.find().sort("created_at", -1).to_list(length=None)
+        estimates = await estimates_collection.find().sort("created_at", -1).to_list(length=None)  # type: ignore
         
         # Convert ObjectId to string for each estimate and add conversion status
         for estimate in estimates:
@@ -167,7 +167,7 @@ async def get_estimate_by_number(estimate_number: str):
         db = get_database()
         estimates_collection = db.estimates
         
-        estimate = await estimates_collection.find_one({"estimate_number": estimate_number})
+        estimate = await estimates_collection.find_one({"estimate_number": estimate_number})  # type: ignore
         
         if not estimate:
             raise HTTPException(
@@ -203,7 +203,7 @@ async def get_estimate_by_id(estimate_id: str):
         db = get_database()
         estimates_collection = db.estimates
         
-        estimate = await estimates_collection.find_one({"estimate_id": estimate_id})
+        estimate = await estimates_collection.find_one({"estimate_id": estimate_id})  # type: ignore
         
         if not estimate:
             raise HTTPException(
@@ -240,7 +240,7 @@ async def delete_estimate(estimate_id: str):
         estimates_collection = db.estimates
         
         # Check if estimate exists
-        estimate = await estimates_collection.find_one({"estimate_id": estimate_id})
+        estimate = await estimates_collection.find_one({"estimate_id": estimate_id})  # type: ignore
         if not estimate:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -255,7 +255,7 @@ async def delete_estimate(estimate_id: str):
             )
         
         # Delete the estimate
-        result = await estimates_collection.delete_one({"estimate_id": estimate_id})
+        result = await estimates_collection.delete_one({"estimate_id": estimate_id})  # type: ignore
         
         if result.deleted_count > 0:
             # Notify all WebSocket clients of the update
@@ -287,7 +287,7 @@ async def convert_estimate_to_order(estimate_id: str, payment_mode: str = "Cash"
         orders_collection = db.orders
         
         # Get the estimate
-        estimate = await estimates_collection.find_one({"estimate_id": estimate_id})
+        estimate = await estimates_collection.find_one({"estimate_id": estimate_id})  # type: ignore
         if not estimate:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -331,11 +331,11 @@ async def convert_estimate_to_order(estimate_id: str, payment_mode: str = "Cash"
         order_data["is_from_estimate"] = True
         
         # Insert the order
-        order_result = await orders_collection.insert_one(order_data)
+        order_result = await orders_collection.insert_one(order_data)  # type: ignore
         
         if order_result.inserted_id:
             # Update the estimate to mark it as converted
-            await estimates_collection.update_one(
+            await estimates_collection.update_one(  # type: ignore
                 {"estimate_id": estimate_id},
                 {
                     "$set": {
@@ -386,7 +386,7 @@ async def get_converted_estimates():
         db = get_database()
         estimates_collection = db.estimates
         
-        estimates = await estimates_collection.find({
+        estimates = await estimates_collection.find({  # type: ignore
             "is_converted_to_order": True
         }).sort("created_at", -1).to_list(length=None)
         
@@ -410,7 +410,7 @@ async def get_pending_estimates():
         db = get_database()
         estimates_collection = db.estimates
         
-        estimates = await estimates_collection.find({
+        estimates = await estimates_collection.find({  # type: ignore
             "is_converted_to_order": {"$ne": True}
         }).sort("created_at", -1).to_list(length=None)
         

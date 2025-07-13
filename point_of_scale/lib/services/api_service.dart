@@ -575,43 +575,6 @@ class ApiService {
     }
   }
 
-  // Convert estimate to order
-  static Future<Map<String, dynamic>> convertEstimateToOrder({
-    required String estimateId,
-    required String saleBy,
-    String paymentMode = "Cash",
-  }) async {
-    return _retryRequest(() async {
-      final url = Uri.parse(
-        '$baseUrl/estimates/$estimateId/convert-to-order?payment_mode=$paymentMode&sale_by=$saleBy',
-      );
-      print('🌐 Converting estimate to order: $url');
-      final response = await http
-          .post(url)
-          .timeout(const Duration(seconds: 20));
-      print('📡 Response status:  ${response.statusCode}');
-      print('📡 Response body: ${response.body}');
-      final data = json.decode(response.body);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        _clearCache();
-        return {
-          'success': true,
-          'message': data['message'] ?? 'Estimate converted to order!',
-          'data': data['data'] ?? {},
-          'order_id': data['order_id'] ?? '',
-          'sale_number': data['sale_number'] ?? '',
-        };
-      } else {
-        return {
-          'success': false,
-          'message':
-              data['detail'] ?? data['message'] ?? 'Failed to convert estimate',
-          'error': 'Server returned status ${response.statusCode}',
-        };
-      }
-    });
-  }
-
   // Delete estimate
   static Future<Map<String, dynamic>> deleteEstimate({
     required String estimateId,
