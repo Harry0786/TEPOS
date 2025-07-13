@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 from database.database import get_database
-from typing import List
+from typing import List, Any, Dict
 from datetime import datetime
 from bson import ObjectId
 import asyncio
@@ -13,7 +13,7 @@ router = APIRouter(
     tags=["orders"]
 )
 
-def get_next_sale_number():
+async def get_next_sale_number() -> str:
     """Get the next sequential sale number"""
     try:
         db = get_database()
@@ -43,9 +43,10 @@ def get_next_sale_number():
             }
         ]
         
-        result = list(orders_collection.aggregate(pipeline))
+        cursor = orders_collection.aggregate(pipeline)
+        result = await cursor.to_list(length=1)
         
-        if result:
+        if result and len(result) > 0:
             # Extract the number from the highest sale number
             highest_number = result[0]["numeric_part"]
             next_number = highest_number + 1
@@ -62,7 +63,7 @@ def get_next_sale_number():
         return f"#{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
 @router.post("/create-sale", status_code=status.HTTP_201_CREATED)
-def create_completed_sale(order_data: OrderCreate):
+async def create_completed_sale(order_data: OrderCreate) -> Dict[str, Any]:
     """Create a new completed sale"""
     try:
         print(f"🔄 Starting sale creation for customer: {order_data.customer_name}")
@@ -86,7 +87,7 @@ def create_completed_sale(order_data: OrderCreate):
         
         # Add timeout for sale number generation
         try:
-            order_dict["sale_number"] = get_next_sale_number()
+            order_dict["sale_number"] = await get_next_sale_number()
         except Exception:
             print("⚠️ Error getting sale number, using fallback")
             order_dict["sale_number"] = f"#{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -106,14 +107,13 @@ def create_completed_sale(order_data: OrderCreate):
         
         print(f"💾 Inserting order into database...")
         # Insert into database with timeout
-        result = orders_collection.insert_one(order_dict)
+        result = await orders_collection.insert_one(order_dict)
         
         if result.inserted_id:
             print(f"✅ Order created successfully: {order_dict['order_id']}")
             # Notify all WebSocket clients of the update
             try:
-                import asyncio
-                asyncio.create_task(websocket_manager.broadcast_update({
+                await websocket_manager.broadcast_update({
                     "type": "order",
                     "action": "create",
                     "id": order_dict["order_id"],
@@ -124,7 +124,7 @@ def create_completed_sale(order_data: OrderCreate):
                         "total": order_dict["total"],
                         "created_at": order_dict["created_at"].isoformat()
                     }
-                }))
+                })
             except Exception as ws_error:
                 print(f"⚠️ WebSocket notification failed: {ws_error}")
                 # Continue even if WebSocket fails
@@ -158,7 +158,7 @@ def create_completed_sale(order_data: OrderCreate):
         )
 
 @router.get("/all")
-def get_all_orders():
+async def get_all_orders() -> List[Dict[str, Any]]:
     """Get all orders (estimates + completed sales) - Legacy endpoint for compatibility"""
     try:
         db = get_database()
@@ -166,10 +166,10 @@ def get_all_orders():
         orders_collection = db.orders
         
         # Get all estimates
-        estimates = list(estimates_collection.find().sort("created_at", -1))
+        estimates = await estimates_collection.find().sort("created_at", -1).to_list(length=None)
         
         # Get all completed orders
-        orders = list(orders_collection.find().sort("created_at", -1))
+        orders = await orders_collection.find().sort("created_at", -1).to_list(length=None)
         
         # Convert estimates to orders format
         all_orders = []
@@ -237,7 +237,7 @@ def get_all_orders():
         )
 
 @router.get("/separate")
-def get_orders_and_estimates_separate():
+async def get_orders_and_estimates_separate() -> Dict[str, Any]:
     """Get orders and estimates as separate lists"""
     try:
         db = get_database()
@@ -245,10 +245,10 @@ def get_orders_and_estimates_separate():
         orders_collection = db.orders
         
         # Get all estimates
-        estimates = list(estimates_collection.find().sort("created_at", -1))
+        estimates = await estimates_collection.find().sort("created_at", -1).to_list(length=None)
         
         # Get all completed orders
-        orders = list(orders_collection.find().sort("created_at", -1))
+        orders = await orders_collection.find().sort("created_at", -1).to_list(length=None)
         
         # Convert ObjectIds to strings
         for estimate in estimates:
@@ -283,14 +283,14 @@ def get_orders_and_estimates_separate():
         )
 
 @router.get("/orders-only")
-def get_orders_only():
+async def get_orders_only() -> Dict[str, Any]:
     """Get only completed orders"""
     try:
         db = get_database()
         orders_collection = db.orders
         
         # Get all completed orders
-        orders = list(orders_collection.find().sort("created_at", -1))
+        orders = await orders_collection.find().sort("created_at", -1).to_list(length=None)
         
         # Convert ObjectIds to strings
         for order in orders:
@@ -311,13 +311,13 @@ def get_orders_only():
         )
 
 @router.get("/{order_id}")
-def get_order_by_id(order_id: str):
+async def get_order_by_id(order_id: str) -> Dict[str, Any]:
     """Get order by ID"""
     try:
         db = get_database()
         orders_collection = db.orders
         
-        order = orders_collection.find_one({"order_id": order_id})
+        order = await orders_collection.find_one({"order_id": order_id})
         
         if not order:
             raise HTTPException(
@@ -339,13 +339,13 @@ def get_order_by_id(order_id: str):
         )
 
 @router.get("/number/{sale_number}")
-def get_order_by_number(sale_number: str):
+async def get_order_by_number(sale_number: str) -> Dict[str, Any]:
     """Get order by sale number (e.g., #001)"""
     try:
         db = get_database()
         orders_collection = db.orders
         
-        order = orders_collection.find_one({"sale_number": sale_number})
+        order = await orders_collection.find_one({"sale_number": sale_number})
         
         if not order:
             raise HTTPException(
@@ -367,22 +367,28 @@ def get_order_by_number(sale_number: str):
         )
 
 @router.put("/{order_id}/status")
-def update_order_status(order_id: str, new_status: str):
+async def update_order_status(order_id: str, new_status: str) -> Dict[str, Any]:
     """Update order status"""
     try:
         db = get_database()
         orders_collection = db.orders
         
         # Update the order status
-        result = orders_collection.update_one(
+        result = await orders_collection.update_one(
             {"order_id": order_id},
             {"$set": {"status": new_status}}
         )
         
         if result.modified_count > 0:
             # Notify all WebSocket clients of the update
-            # WebSocket notification is still async, so use create_task if running in an event loop
-            pass
+            try:
+                await websocket_manager.broadcast_update({
+                    "type": "order",
+                    "action": "update",
+                    "id": order_id
+                })
+            except Exception as ws_error:
+                print(f"⚠️ WebSocket notification failed: {ws_error}")
             
             return {
                 "success": True,
@@ -402,7 +408,7 @@ def update_order_status(order_id: str, new_status: str):
         )
 
 @router.delete("/{order_id}")
-def delete_order(order_id: str):
+async def delete_order(order_id: str) -> Dict[str, Any]:
     """Delete an order and its linked estimate if it was created from an estimate"""
     try:
         db = get_database()
@@ -410,7 +416,7 @@ def delete_order(order_id: str):
         estimates_collection = db.estimates
         
         # Check if order exists
-        order = orders_collection.find_one({"order_id": order_id})
+        order = await orders_collection.find_one({"order_id": order_id})
         if not order:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -421,13 +427,13 @@ def delete_order(order_id: str):
         source_estimate_id = order.get("source_estimate_id")
         
         # Delete the order
-        result = orders_collection.delete_one({"order_id": order_id})
+        result = await orders_collection.delete_one({"order_id": order_id})
         
         if result.deleted_count > 0:
             # If order was created from an estimate, also delete the estimate
             if source_estimate_id:
                 try:
-                    estimates_collection.delete_one({"estimate_id": source_estimate_id})
+                    await estimates_collection.delete_one({"estimate_id": source_estimate_id})
                     print(f"Deleted linked estimate: {source_estimate_id}")
                 except Exception as e:
                     print(f"Warning: Failed to delete linked estimate {source_estimate_id}: {e}")
@@ -435,12 +441,11 @@ def delete_order(order_id: str):
             
             # Notify all WebSocket clients of the update
             try:
-                import asyncio
-                asyncio.create_task(websocket_manager.broadcast_update({
+                await websocket_manager.broadcast_update({
                     "type": "order",
                     "action": "delete",
                     "id": order_id
-                }))
+                })
             except Exception as ws_error:
                 print(f"⚠️ WebSocket notification failed: {ws_error}")
             

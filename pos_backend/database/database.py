@@ -1,14 +1,15 @@
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 import os
 from dotenv import load_dotenv
 import asyncio
 from config import Config
+from typing import Optional
 
 load_dotenv()
 
 class MongoDB:
-    client: AsyncIOMotorClient = None
-    database = None
+    client: Optional[AsyncIOMotorClient] = None
+    database: Optional[AsyncIOMotorDatabase] = None
 
 mongodb = MongoDB()
 
@@ -45,7 +46,7 @@ async def close_mongo_connection():
         mongodb.client.close()
         print("🔌 Disconnected from MongoDB")
 
-def get_database():
+def get_database() -> AsyncIOMotorDatabase:
     if mongodb.database is None:
         raise Exception("Database not connected. Call connect_to_mongo() first.")
     return mongodb.database
