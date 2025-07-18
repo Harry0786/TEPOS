@@ -8,11 +8,11 @@ import '../services/performance_service.dart';
 import '../services/pdf_service.dart';
 import 'view_orders_screen.dart';
 import 'reports_screen.dart';
-import 'customers_screen.dart';
 import 'settings_screen.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:flutter/services.dart';
+import 'inventory_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -401,6 +401,14 @@ class _HomeScreenState extends State<HomeScreen>
     _cacheInvalidated = true;
   }
 
+  // Helper to check if a date is today
+  bool _isToday(DateTime date) {
+    final now = DateTime.now();
+    return date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day;
+  }
+
   // Optimized computed values with single pass calculation
   Map<String, dynamic> get _orderStats {
     if (_cachedOrderStats != null && !_cacheInvalidated) {
@@ -415,11 +423,11 @@ class _HomeScreenState extends State<HomeScreen>
     int completedSales = 0;
 
     try {
-      // Process orders (only completed sales count as orders)
+      // Only count today's completed orders for totalSales and totalOrders
       for (final order in _orders) {
         final status = order['status']?.toString().toLowerCase() ?? '';
-
-        if (status == 'completed') {
+        final createdAt = _parseDate(order['created_at']);
+        if (status == 'completed' && _isToday(createdAt)) {
           completedSales++;
           totalOrders++;
           final amount = order['amount'];
@@ -428,12 +436,7 @@ class _HomeScreenState extends State<HomeScreen>
           totalSales += (value is num ? value.toDouble() : 0.0);
         }
       }
-
-      // Process estimates (count all estimates)
-      for (final estimate in _estimates) {
-        final status = estimate['status']?.toString().toLowerCase() ?? '';
-        // Estimates are counted separately, not as orders
-      }
+      // Estimates are counted separately, not as orders
     } catch (e) {
       print('❌ Error computing order stats: $e');
       // Use safe defaults
@@ -771,7 +774,7 @@ class _HomeScreenState extends State<HomeScreen>
                 children: [
                   Expanded(
                     child: GestureDetector(
-                      onTap: () => _showPaymentBreakdownDialog(),
+                      onTap: () => _showPaymentBreakdownDialogToday(),
                       child: _buildSummaryCard(
                         'Total Sales',
                         'Rs. ${_totalSales.toStringAsFixed(0)}',
@@ -878,87 +881,204 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Map<String, Map<String, dynamic>> _getPaymentBreakdown() {
-    final breakdown = <String, Map<String, dynamic>>{
-      'cash': {'count': 0, 'amount': 0.0},
-      'card': {'count': 0, 'amount': 0.0},
-      'online': {'count': 0, 'amount': 0.0},
-      'upi': {'count': 0, 'amount': 0.0},
-      'bank_transfer': {'count': 0, 'amount': 0.0},
-      'cheque': {'count': 0, 'amount': 0.0},
-      'other': {'count': 0, 'amount': 0.0},
-    };
+  // Payment breakdown for today's completed orders only
+  Map<String, Map<String, dynamic>> _getPaymentBreakdownToday() {
+    final breakdown = <String, Map<String, dynamic>>{};
 
     for (final order in _orders) {
       final status = order['status']?.toString().toLowerCase() ?? '';
-      if (status == 'completed') {
-        final paymentMode =
-            order['payment_mode']?.toString().toLowerCase() ?? 'other';
+      final createdAt = _parseDate(order['created_at']);
+      if (status == 'completed' && _isToday(createdAt)) {
+        final paymentMode = order['payment_mode']?.toString() ?? 'Other';
         final amount = order['total'] ?? order['amount'] ?? 0.0;
-
-        if (breakdown.containsKey(paymentMode)) {
-          breakdown[paymentMode]!['count'] =
-              (breakdown[paymentMode]!['count'] as int) + 1;
-          breakdown[paymentMode]!['amount'] =
-              (breakdown[paymentMode]!['amount'] as double) +
-              (amount is num ? amount.toDouble() : 0.0);
-        } else {
-          breakdown['other']!['count'] =
-              (breakdown['other']!['count'] as int) + 1;
-          breakdown['other']!['amount'] =
-              (breakdown['other']!['amount'] as double) +
-              (amount is num ? amount.toDouble() : 0.0);
+        if (!breakdown.containsKey(paymentMode)) {
+          breakdown[paymentMode] = {'count': 0, 'amount': 0.0};
         }
+        breakdown[paymentMode]!['count'] =
+            (breakdown[paymentMode]!['count'] as int) + 1;
+        breakdown[paymentMode]!['amount'] =
+            (breakdown[paymentMode]!['amount'] as double) +
+            (amount is num ? amount.toDouble() : 0.0);
       }
     }
-
     return breakdown;
   }
 
   String _getPaymentModeDisplayName(String mode) {
-    switch (mode) {
-      case 'cash':
-        return 'Cash';
-      case 'card':
-        return 'Card';
-      case 'online':
-        return 'Online';
-      case 'upi':
-        return 'UPI';
-      case 'bank_transfer':
-        return 'Bank Transfer';
-      case 'cheque':
-        return 'Cheque';
-      case 'other':
-        return 'Other';
-      default:
-        return mode.toUpperCase();
-    }
+    return mode;
   }
 
   Color _getPaymentModeColor(String mode) {
-    switch (mode) {
-      case 'cash':
-        return const Color(0xFF4CAF50);
-      case 'card':
-        return const Color(0xFF2196F3);
-      case 'online':
-        return const Color(0xFF9C27B0);
-      case 'upi':
-        return const Color(0xFF673AB7);
-      case 'bank_transfer':
-        return const Color(0xFFFF9800);
-      case 'cheque':
-        return const Color(0xFF607D8B);
-      case 'other':
-        return const Color(0xFF795548);
-      default:
-        return const Color(0xFF757575);
-    }
+    // Optionally, assign colors based on known modes, fallback to a default
+    if (mode.toLowerCase().contains('cash')) return const Color(0xFF4CAF50);
+    if (mode.toLowerCase().contains('upi')) return const Color(0xFF673AB7);
+    if (mode.toLowerCase().contains('card')) return const Color(0xFF2196F3);
+    if (mode.toLowerCase().contains('online')) return const Color(0xFF9C27B0);
+    if (mode.toLowerCase().contains('bank')) return const Color(0xFFFF9800);
+    if (mode.toLowerCase().contains('cheque')) return const Color(0xFF607D8B);
+    return const Color(0xFF757575);
   }
 
   void _showPaymentBreakdownDialog() {
-    final paymentBreakdown = _getPaymentBreakdown();
+    final paymentBreakdown = _getPaymentBreakdownToday();
+    // Calculate total from payment breakdown to ensure accuracy
+    final totalAmount = paymentBreakdown.values.fold<double>(
+      0.0,
+      (sum, data) => sum + (data['amount'] as double),
+    );
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          title: Row(
+            children: [
+              const Icon(Icons.payment, color: Color(0xFF4CAF50), size: 24),
+              const SizedBox(width: 8),
+              const Text(
+                'Payment Breakdown',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Total Sales row (improved)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.attach_money,
+                      color: Color(0xFF6B8E7F),
+                      size: 26,
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Total Sales',
+                          style: TextStyle(
+                            color: Color(0xFFB0B0B0),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Rs. ${totalAmount.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                const Divider(color: Color(0xFF232526), thickness: 1),
+                const SizedBox(height: 10),
+                if (paymentBreakdown.isNotEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Payment Modes',
+                      style: TextStyle(
+                        color: Color(0xFFB0B0B0),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                if (paymentBreakdown.isEmpty)
+                  const Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.grey, size: 32),
+                        SizedBox(height: 8),
+                        Text(
+                          'No payment data available',
+                          style: TextStyle(color: Colors.grey, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children:
+                        paymentBreakdown.entries.map((entry) {
+                          final mode = entry.key;
+                          final data = entry.value;
+                          final count = data['count'] as int;
+                          final amount = data['amount'] as double;
+                          if (count == 0) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 4,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: _getPaymentModeColor(mode),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  _getPaymentModeDisplayName(mode),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  'Rs. ${amount.toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Close',
+                style: TextStyle(color: Color(0xFF6B8E7F)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Update the onTap for Total Sales to use the new breakdown
+  void _showPaymentBreakdownDialogToday() {
+    final paymentBreakdown = _getPaymentBreakdownToday();
     // Calculate total from payment breakdown to ensure accuracy
     final totalAmount = paymentBreakdown.values.fold<double>(
       0.0,
@@ -1243,14 +1363,14 @@ class _HomeScreenState extends State<HomeScreen>
                   },
                 ),
                 _buildQuickActionCard(
-                  'Customers',
-                  Icons.people,
+                  'Inventory',
+                  Icons.inventory,
                   const Color(0xFF6B8E7F),
                   () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const CustomersScreen(),
+                        builder: (context) => const InventoryScreen(),
                       ),
                     );
                   },
@@ -1294,7 +1414,7 @@ class _HomeScreenState extends State<HomeScreen>
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                'Recent Orders and Estimates',
+                'Recent Activity',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 17,
@@ -1346,119 +1466,112 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildOrderItem(Map<String, dynamic> item) {
     final bool isLast = _recentOrders.indexOf(item) == _recentOrders.length - 1;
-    final int itemCount =
-        (item['items'] is List)
-            ? item['items'].length
-            : (item['items_count'] ?? 0);
+    final String typeLabel = (item['type'] == 'order') ? 'Order' : 'Estimate';
+    final Color typeColor =
+        (item['type'] == 'order')
+            ? const Color(0xFF4CAF50)
+            : const Color(0xFFFF9800);
+    final String number =
+        item['display_id'] ??
+        item['estimate_number'] ??
+        item['sale_number'] ??
+        item['order_id'] ??
+        item['id'] ??
+        '';
+    final double amount =
+        (item['amount'] ?? item['total'] ?? 0.0) is num
+            ? (item['amount'] ?? item['total'] ?? 0.0).toDouble()
+            : 0.0;
+    final String dateTimeStr = item['created_at']?.toString() ?? '';
+    DateTime? dateTime;
+    try {
+      dateTime = DateTime.tryParse(dateTimeStr);
+    } catch (_) {
+      dateTime = null;
+    }
+    String formattedTime =
+        dateTime != null
+            ? (dateTime.hour % 12 == 0
+                    ? '12'
+                    : (dateTime.hour % 12).toString().padLeft(2, '0')) +
+                ':' +
+                dateTime.minute.toString().padLeft(2, '0') +
+                (dateTime.hour < 12 ? ' AM' : ' PM')
+            : '';
 
-    final bool isOrder = item['type'] == 'order';
-    final bool isCompleted = item['status'] == 'Completed';
-
-    return GestureDetector(
-      onTap: () => _showOrderDetails(item),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          border:
-              isLast
-                  ? null
-                  : const Border(
-                    bottom: BorderSide(color: Color(0xFF3A3A3A), width: 0.5),
-                  ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color:
-                    isOrder && isCompleted
-                        ? const Color(0xFF4CAF50).withOpacity(0.2)
-                        : const Color(0xFFFF9800).withOpacity(0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                isOrder && isCompleted ? Icons.check_circle : Icons.description,
-                color:
-                    isOrder && isCompleted
-                        ? const Color(0xFF4CAF50)
-                        : const Color(0xFFFF9800),
-                size: 18,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item['display_id'] ?? '',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    item['customer_name'] ?? item['customer'] ?? '',
-                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                  ),
-                  Text(
-                    '${itemCount} items',
-                    style: TextStyle(color: Colors.grey[500], fontSize: 10),
-                  ),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border:
+            isLast
+                ? null
+                : const Border(
+                  bottom: BorderSide(color: Color(0xFF3A3A3A), width: 0.5),
+                ),
+      ),
+      child: Row(
+        children: [
+          // Type + Number
+          Expanded(
+            flex: 3,
+            child: Row(
               children: [
-                Text(
-                  'Rs. ${((item['amount'] ?? item['total'] ?? 0.0).toStringAsFixed(0))}',
-                  style: const TextStyle(
-                    color: Color(0xFF6B8E7F),
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  (item['time'] ??
-                      (item['created_at']?.toString().split(' ')[0] ?? '')),
-                  style: TextStyle(color: Colors.grey[400], fontSize: 11),
-                ),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
+                    horizontal: 8,
+                    vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color:
-                        isOrder && isCompleted
-                            ? const Color(0xFF4CAF50).withOpacity(0.2)
-                            : const Color(0xFFFF9800).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
+                    color: typeColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    isOrder
-                        ? (isCompleted ? 'Completed' : 'Order')
-                        : 'Estimate',
+                    typeLabel,
                     style: TextStyle(
-                      color:
-                          isOrder && isCompleted
-                              ? const Color(0xFF4CAF50)
-                              : const Color(0xFFFF9800),
-                      fontSize: 9,
+                      color: typeColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    number,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
                     ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+          // Amount
+          Expanded(
+            flex: 2,
+            child: Text(
+              'Rs. ${amount.toStringAsFixed(2)}',
+              style: const TextStyle(
+                color: Color(0xFF6B8E7F),
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+          // Time only
+          Expanded(
+            flex: 2,
+            child: Text(
+              formattedTime,
+              style: TextStyle(color: Colors.grey[400], fontSize: 13),
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
       ),
     );
   }

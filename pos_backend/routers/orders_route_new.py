@@ -73,13 +73,8 @@ async def create_completed_sale(order_data: OrderCreate) -> Dict[str, Any]:
         # Convert to dict and add timestamp
         order_dict = order_data.model_dump()
         
-        # Set created_at if not provided
-        if not order_dict.get("created_at"):
-            order_dict["created_at"] = datetime.now()
-        else:
-            # Convert string to datetime if provided as string
-            if isinstance(order_dict["created_at"], str):
-                order_dict["created_at"] = datetime.fromisoformat(order_dict["created_at"].replace('Z', '+00:00'))
+        # Set created_at to current time always
+        order_dict["created_at"] = datetime.now()
         
         print(f"📋 Generating order ID and sale number...")
         # Generate unique order ID and sequential sale number

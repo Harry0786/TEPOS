@@ -73,13 +73,8 @@ async def create_estimate(estimate_data: EstimateCreate) -> Dict[str, Any]:
         # Convert to dict and add timestamp
         estimate_dict = estimate_data.model_dump()
         
-        # Set created_at if not provided
-        if not estimate_dict.get("created_at"):
-            estimate_dict["created_at"] = datetime.now()
-        else:
-            # Convert string to datetime if provided as string
-            if isinstance(estimate_dict["created_at"], str):
-                estimate_dict["created_at"] = datetime.fromisoformat(estimate_dict["created_at"].replace('Z', '+00:00'))
+        # Set created_at to current time always
+        estimate_dict["created_at"] = datetime.now()
         
         # Generate unique estimate ID and sequential estimate number
         estimate_dict["estimate_id"] = f"EST-{uuid.uuid4().hex[:8].upper()}"

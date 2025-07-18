@@ -193,7 +193,7 @@ class ApiService {
     return _preventDuplicateRequest(
       requestKey,
       () => _retryRequest(() async {
-        final url = Uri.parse('$baseUrl/orders/create');
+        final url = Uri.parse('$baseUrl/orders/create-sale');
 
         print('🌐 API Request URL: $url');
         print('📤 Creating completed sale...');
