@@ -75,6 +75,7 @@ async def create_completed_sale(order_data: OrderCreate) -> Dict[str, Any]:
         
         # Set created_at to current UTC time always
         order_dict["created_at"] = datetime.now(timezone.utc)
+        print(f"[DEBUG] Order created_at: {order_dict['created_at']}")
         
         print(f"📋 Generating order ID and sale number...")
         # Generate unique order ID and sequential sale number

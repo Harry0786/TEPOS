@@ -4,6 +4,7 @@ import '../services/websocket_service.dart';
 import '../services/pdf_service.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
+import 'package:intl/intl.dart';
 
 class ViewOrdersScreen extends StatefulWidget {
   const ViewOrdersScreen({super.key});
@@ -215,7 +216,18 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
                   _buildDetailRow('Payment Mode', order['payment_mode'] ?? ''),
                 _buildDetailRow(
                   'Date',
-                  order['time'] ?? order['created_at'].toString().split(' ')[0],
+                  (() {
+                    final dateTimeStr = order['created_at']?.toString() ?? '';
+                    DateTime? dateTime;
+                    try {
+                      dateTime = DateTime.tryParse(dateTimeStr)?.toLocal();
+                    } catch (_) {
+                      dateTime = null;
+                    }
+                    return dateTime != null
+                        ? DateFormat('yyyy-MM-dd hh:mm a').format(dateTime)
+                        : '';
+                  })(),
                 ),
                 const SizedBox(height: 16),
                 const Text(
@@ -567,9 +579,26 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            order['created_at']
-                                                .toString()
-                                                .split(' ')[0],
+                                            (() {
+                                              final dateTimeStr =
+                                                  order['created_at']
+                                                      ?.toString() ??
+                                                  '';
+                                              DateTime? dateTime;
+                                              try {
+                                                dateTime =
+                                                    DateTime.tryParse(
+                                                      dateTimeStr,
+                                                    )?.toLocal();
+                                              } catch (_) {
+                                                dateTime = null;
+                                              }
+                                              return dateTime != null
+                                                  ? DateFormat(
+                                                    'yyyy-MM-dd hh:mm a',
+                                                  ).format(dateTime)
+                                                  : '';
+                                            })(),
                                             style: TextStyle(
                                               color: Colors.grey[500],
                                               fontSize: 12,

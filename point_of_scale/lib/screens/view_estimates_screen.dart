@@ -4,6 +4,7 @@ import '../services/api_service.dart';
 import '../services/websocket_service.dart';
 import 'package:printing/printing.dart';
 import '../services/pdf_service.dart';
+import 'package:intl/intl.dart';
 
 class ViewEstimatesScreen extends StatefulWidget {
   const ViewEstimatesScreen({super.key});
@@ -479,7 +480,26 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            _formatDate(estimate['created_at']),
+                                            (() {
+                                              final dateTimeStr =
+                                                  estimate['created_at']
+                                                      ?.toString() ??
+                                                  '';
+                                              DateTime? dateTime;
+                                              try {
+                                                dateTime =
+                                                    DateTime.tryParse(
+                                                      dateTimeStr,
+                                                    )?.toLocal();
+                                              } catch (_) {
+                                                dateTime = null;
+                                              }
+                                              return dateTime != null
+                                                  ? DateFormat(
+                                                    'yyyy-MM-dd hh:mm a',
+                                                  ).format(dateTime)
+                                                  : '';
+                                            })(),
                                             style: TextStyle(
                                               color: Colors.grey[500],
                                               fontSize: 12,
@@ -542,7 +562,22 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                 _buildDetailRow('Address', estimate['customer_address'] ?? ''),
                 _buildDetailRow('Sale By', estimate['sale_by'] ?? ''),
                 _buildDetailRow('Status', estimate['status'] ?? ''),
-                _buildDetailRow('Date', _formatDate(estimate['created_at'])),
+                _buildDetailRow(
+                  'Date',
+                  (() {
+                    final dateTimeStr =
+                        estimate['created_at']?.toString() ?? '';
+                    DateTime? dateTime;
+                    try {
+                      dateTime = DateTime.tryParse(dateTimeStr)?.toLocal();
+                    } catch (_) {
+                      dateTime = null;
+                    }
+                    return dateTime != null
+                        ? DateFormat('yyyy-MM-dd hh:mm a').format(dateTime)
+                        : '';
+                  })(),
+                ),
                 const SizedBox(height: 16),
                 const Text(
                   'Items:',
