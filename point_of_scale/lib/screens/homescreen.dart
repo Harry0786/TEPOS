@@ -768,56 +768,155 @@ class _HomeScreenState extends State<HomeScreen>
             ],
           ),
           const SizedBox(height: 10),
-          Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _showPaymentBreakdownDialogToday(),
-                      child: _buildSummaryCard(
-                        'Total Sales',
-                        'Rs. ${_totalSales.toStringAsFixed(0)}',
-                        Icons.attach_money,
-                        const Color(0xFF6B8E7F),
+          // Large Total Sales Card
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0D0D0D),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF3A3A3A)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.attach_money,
+                      color: Color(0xFF6B8E7F),
+                      size: 32,
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Total Sales',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Rs. ${_totalSales.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    color: Color(0xFF6B8E7F),
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildSummaryCard(
-                      'Orders',
-                      '$_totalOrders',
-                      Icons.receipt,
-                      const Color(0xFF4CAF50),
-                    ),
-                  ),
-                ],
+                ),
+                const SizedBox(height: 18),
+                // Payment Breakdown Inline
+                Builder(
+                  builder: (context) {
+                    final paymentBreakdown = _getPaymentBreakdownToday();
+                    final totalAmount = paymentBreakdown.values.fold<double>(
+                      0.0,
+                      (sum, data) => sum + (data['amount'] as double),
+                    );
+                    if (paymentBreakdown.isEmpty || totalAmount == 0.0) {
+                      return const Center(
+                        child: Text(
+                          'No payment data available',
+                          style: TextStyle(color: Colors.grey, fontSize: 14),
+                        ),
+                      );
+                    }
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Payment Breakdown',
+                          style: TextStyle(
+                            color: Color(0xFFB0B0B0),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...paymentBreakdown.entries
+                            .where(
+                              (entry) => (entry.value['amount'] as double) > 0,
+                            )
+                            .map((entry) {
+                              final mode = entry.key;
+                              final data = entry.value;
+                              final amount = data['amount'] as double;
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 4,
+                                      height: 20,
+                                      decoration: BoxDecoration(
+                                        color: _getPaymentModeColor(mode),
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      _getPaymentModeDisplayName(mode),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    Text(
+                                      'Rs. ${amount.toStringAsFixed(0)}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            })
+                            .toList(),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          // Orders and Estimates cards underneath
+          Row(
+            children: [
+              Expanded(
+                child: _buildSummaryCard(
+                  'Orders',
+                  '$_totalOrders',
+                  Icons.receipt,
+                  const Color(0xFF4CAF50),
+                ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildSummaryCard(
-                      'Estimates',
-                      '$_totalEstimates',
-                      Icons.description,
-                      const Color(0xFFFF9800),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildSummaryCard(
-                      'Completed',
-                      '$_completedSales',
-                      Icons.check_circle,
-                      const Color(0xFF2196F3),
-                    ),
-                  ),
-                ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildSummaryCard(
+                  'Estimates',
+                  '$_totalEstimates',
+                  Icons.description,
+                  const Color(0xFFFF9800),
+                ),
               ),
             ],
           ),
+          const SizedBox(height: 18),
         ],
       ),
     );
