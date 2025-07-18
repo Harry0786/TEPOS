@@ -7,6 +7,7 @@ from bson import ObjectId
 import uuid
 import asyncio
 from services.websocket_service import websocket_manager
+from dateutil import tz
 
 router = APIRouter(
     prefix="/estimates",
@@ -73,9 +74,10 @@ async def create_estimate(estimate_data: EstimateCreate) -> Dict[str, Any]:
         # Convert to dict and add timestamp
         estimate_dict = estimate_data.model_dump()
         
-        # Set created_at to current UTC time always
-        estimate_dict["created_at"] = datetime.now(timezone.utc)
-        print(f"[DEBUG] Estimate created_at: {estimate_dict['created_at']}")
+        # Set created_at to current IST time always
+        ist = tz.gettz('Asia/Kolkata')
+        estimate_dict["created_at"] = datetime.now(ist)
+        print(f"[DEBUG] Estimate created_at (IST): {estimate_dict['created_at']}")
         
         # Generate unique estimate ID and sequential estimate number
         estimate_dict["estimate_id"] = f"EST-{uuid.uuid4().hex[:8].upper()}"
@@ -321,11 +323,11 @@ async def convert_estimate_to_order(estimate_id: str, payment_mode: str = "Cash"
             "discount_percentage": estimate.get("discount_percentage"),
             "total": estimate["total"],
             "payment_mode": payment_mode,
-            "created_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(tz.gettz('Asia/Kolkata')),
             "source_estimate_id": estimate["estimate_id"],
             "source_estimate_number": estimate["estimate_number"]
         }
-        print(f"[DEBUG] Order (from estimate) created_at: {order_data['created_at']}")
+        print(f"[DEBUG] Order (from estimate) created_at (IST): {order_data['created_at']}")
         order_data["order_id"] = f"ORDER-{uuid.uuid4().hex[:8].upper()}"
         from routers.orders_route_new import get_next_sale_number
         order_data["sale_number"] = await get_next_sale_number()

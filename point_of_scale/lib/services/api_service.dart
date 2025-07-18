@@ -4,8 +4,8 @@ import 'package:http/http.dart' as http;
 class ApiService {
   // ===== PRODUCTION CONFIGURATION =====
   // Render production URLs only
-  static const String baseUrl = 'https://pos-2wc9.onrender.com/api';
-  static const String webSocketUrl = 'wss://pos-2wc9.onrender.com/ws';
+  static const String baseUrl = 'https://tepos.onrender.com/api';
+  static const String webSocketUrl = 'wss://tepos.onrender.com/ws';
 
   // Helper method to print current configuration
   static void printConfiguration() {

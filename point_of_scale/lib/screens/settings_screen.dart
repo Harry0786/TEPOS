@@ -92,7 +92,8 @@ class _SettingsScreenState extends State<SettingsScreen> with AutoRefreshMixin {
     _businessPhoneController.text = _settings['business_phone'] ?? '';
     _businessEmailController.text = _settings['business_email'] ?? '';
     _gstNumberController.text = _settings['gst_number'] ?? '';
-    _apiUrlController.text = _settings['api_url'] ?? ApiService.baseUrl;
+    _apiUrlController.text =
+        _settings['api_url'] ?? 'https://tepos.onrender.com/api';
 
     _enableNotifications = _settings['enable_notifications'] ?? true;
     _enableAutoBackup = _settings['enable_auto_backup'] ?? true;
