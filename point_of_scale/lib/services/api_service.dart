@@ -49,6 +49,7 @@ class ApiService {
     required double discountAmount,
     required bool isPercentageDiscount,
     required double total,
+    String? createdAt,
   }) async {
     final requestKey = 'sendEstimate_${DateTime.now().millisecondsSinceEpoch}';
     return _preventDuplicateRequest(
@@ -74,6 +75,7 @@ class ApiService {
           'discount_amount': discountAmount,
           'is_percentage_discount': isPercentageDiscount,
           'total': total,
+          'created_at': createdAt ?? DateTime.now().toIso8601String(),
         };
 
         print('📤 Request body: ${json.encode(body)}');
@@ -187,6 +189,7 @@ class ApiService {
     required bool isPercentageDiscount,
     required double total,
     String? paymentMode,
+    String? createdAt,
   }) async {
     final requestKey =
         'createCompletedSale_${DateTime.now().millisecondsSinceEpoch}';
@@ -213,6 +216,7 @@ class ApiService {
           'discount_amount': discountAmount,
           'is_percentage_discount': isPercentageDiscount,
           'total': total,
+          'created_at': createdAt ?? DateTime.now().toIso8601String(),
         };
         // Add payment mode if provided
         if (paymentMode != null) {

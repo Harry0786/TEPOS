@@ -27,7 +27,7 @@ Config.print_configuration()
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=Config.get_cors_origins(),
+    allow_origins=["*"],  # Allow all origins, or specify your frontend URL(s)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

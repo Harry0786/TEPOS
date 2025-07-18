@@ -832,6 +832,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         discountAmount: _discountAmount,
         isPercentageDiscount: _isPercentageDiscount,
         total: _total,
+        createdAt: DateTime.now().toIso8601String(),
       );
 
       // Close loading dialog safely
@@ -1759,6 +1760,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         isPercentageDiscount: _isPercentageDiscount,
         total: _total,
         paymentMode: _selectedPaymentMode,
+        createdAt: DateTime.now().toIso8601String(),
       ).timeout(
         const Duration(seconds: 30),
         onTimeout: () {
