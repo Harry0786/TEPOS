@@ -7,6 +7,7 @@ import asyncio
 import uuid
 from services.websocket_service import websocket_manager
 from models.order import OrderCreate
+from dateutil import tz
 
 router = APIRouter(
     prefix="/orders",
@@ -73,9 +74,10 @@ async def create_completed_sale(order_data: OrderCreate) -> Dict[str, Any]:
         # Convert to dict and add timestamp
         order_dict = order_data.model_dump()
         
-        # Set created_at to current UTC time always
-        order_dict["created_at"] = datetime.now(timezone.utc)
-        print(f"[DEBUG] Order created_at: {order_dict['created_at']}")
+        # Set created_at to current IST time always
+        ist = tz.gettz('Asia/Kolkata')
+        order_dict["created_at"] = datetime.now(ist)
+        print(f"[DEBUG] Order created_at (IST): {order_dict['created_at']}")
         
         print(f"📋 Generating order ID and sale number...")
         # Generate unique order ID and sequential sale number

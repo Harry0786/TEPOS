@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from dateutil import tz
 
 from routers import estimate_route_new, orders_route_new, sms_route, reports_route
 from database.database import connect_to_mongo, close_mongo_connection
@@ -81,7 +82,9 @@ async def websocket_status():
 
 @app.get("/debug/time")
 async def debug_time():
+    ist = tz.gettz('Asia/Kolkata')
     return {
         "utc_now": datetime.now(timezone.utc).isoformat(),
-        "local_now": datetime.now().isoformat()
+        "local_now": datetime.now().isoformat(),
+        "ist_now": datetime.now(ist).isoformat()
     }

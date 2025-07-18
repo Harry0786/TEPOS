@@ -7,6 +7,7 @@ from bson import ObjectId
 import uuid
 import asyncio
 from services.websocket_service import websocket_manager
+from dateutil import tz
 
 router = APIRouter(
     prefix="/estimates",
@@ -73,13 +74,14 @@ async def create_estimate(estimate_data: EstimateCreate):
         
         # Set created_at if not provided
         if not estimate_dict.get("created_at"):
-            estimate_dict["created_at"] = datetime.now(timezone.utc)
-            print(f"[DEBUG] Estimate created_at: {estimate_dict['created_at']}")
+            ist = tz.gettz('Asia/Kolkata')
+            estimate_dict["created_at"] = datetime.now(ist)
+            print(f"[DEBUG] Estimate created_at (IST): {estimate_dict['created_at']}")
         else:
             # Convert string to datetime if provided as string
             if isinstance(estimate_dict["created_at"], str):
-                estimate_dict["created_at"] = datetime.fromisoformat(estimate_dict["created_at"].replace('Z', '+00:00')).astimezone(timezone.utc)
-                print(f"[DEBUG] Estimate created_at (from string): {estimate_dict['created_at']}")
+                estimate_dict["created_at"] = datetime.fromisoformat(estimate_dict["created_at"].replace('Z', '+05:30')).astimezone(tz.gettz('Asia/Kolkata'))
+                print(f"[DEBUG] Estimate created_at (from string, IST): {estimate_dict['created_at']}")
         
         # Generate unique estimate ID and sequential estimate number
         estimate_dict["estimate_id"] = f"EST-{uuid.uuid4().hex[:8].upper()}"

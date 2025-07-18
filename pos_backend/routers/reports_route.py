@@ -4,6 +4,7 @@ from typing import Dict, List, Any
 from datetime import datetime, timedelta
 from bson import ObjectId
 import asyncio
+from dateutil import tz
 
 router = APIRouter(
     prefix="/reports",
@@ -18,10 +19,11 @@ async def get_today_report():
         estimates_collection = db.estimates
         orders_collection = db.orders
         
-        # Get today's date range
-        today = datetime.now().date()
-        start_of_day = datetime.combine(today, datetime.min.time())
-        end_of_day = datetime.combine(today, datetime.max.time())
+        ist = tz.gettz('Asia/Kolkata')
+        # Get today's date range in IST
+        today = datetime.now(ist).date()
+        start_of_day = datetime.combine(today, datetime.min.time(), ist)
+        end_of_day = datetime.combine(today, datetime.max.time(), ist)
         
         # Get today's estimates
         today_estimates = await estimates_collection.find({
@@ -114,9 +116,10 @@ async def get_date_range_report(start_date: str, end_date: str):
         estimates_collection = db.estimates
         orders_collection = db.orders
         
-        # Parse dates
-        start = datetime.fromisoformat(start_date)
-        end = datetime.fromisoformat(end_date)
+        ist = tz.gettz('Asia/Kolkata')
+        # Parse dates in IST for date range report
+        start = datetime.fromisoformat(start_date).astimezone(ist)
+        end = datetime.fromisoformat(end_date).astimezone(ist)
         
         # Get estimates in date range
         estimates = await estimates_collection.find({
@@ -177,12 +180,13 @@ async def get_monthly_report(year: int, month: int):
         estimates_collection = db.estimates
         orders_collection = db.orders
         
-        # Create date range for the month
-        start_of_month = datetime(year, month, 1)
+        ist = tz.gettz('Asia/Kolkata')
+        # Create date range for the month in IST
+        start_of_month = datetime(year, month, 1, tzinfo=ist)
         if month == 12:
-            end_of_month = datetime(year + 1, 1, 1) - timedelta(days=1)
+            end_of_month = datetime(year + 1, 1, 1, tzinfo=ist) - timedelta(days=1)
         else:
-            end_of_month = datetime(year, month + 1, 1) - timedelta(days=1)
+            end_of_month = datetime(year, month + 1, 1, tzinfo=ist) - timedelta(days=1)
         
         # Get estimates for the month
         estimates = await estimates_collection.find({
