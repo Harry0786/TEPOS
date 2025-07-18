@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 
 from routers import estimate_route_new, orders_route_new, sms_route, reports_route
 from database.database import connect_to_mongo, close_mongo_connection
@@ -77,4 +77,11 @@ async def websocket_status():
     return {
         "connected_clients": websocket_manager.get_connected_clients_count(),
         "status": "active"
+    }
+
+@app.get("/debug/time")
+async def debug_time():
+    return {
+        "utc_now": datetime.now(timezone.utc).isoformat(),
+        "local_now": datetime.now().isoformat()
     }
