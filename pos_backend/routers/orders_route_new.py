@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 from database.database import get_database
 from typing import List, Any, Dict
-from datetime import datetime
+from datetime import datetime, timezone
 from bson import ObjectId
 import asyncio
 import uuid
@@ -73,8 +73,8 @@ async def create_completed_sale(order_data: OrderCreate) -> Dict[str, Any]:
         # Convert to dict and add timestamp
         order_dict = order_data.model_dump()
         
-        # Set created_at to current time always
-        order_dict["created_at"] = datetime.now()
+        # Set created_at to current UTC time always
+        order_dict["created_at"] = datetime.now(timezone.utc)
         
         print(f"📋 Generating order ID and sale number...")
         # Generate unique order ID and sequential sale number

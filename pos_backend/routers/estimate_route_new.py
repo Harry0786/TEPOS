@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, status
 from models.estimate import EstimateCreate, EstimateResponse
 from database.database import get_database
 from typing import List, Optional, Any, Dict
-from datetime import datetime
+from datetime import datetime, timezone
 from bson import ObjectId
 import uuid
 import asyncio
@@ -73,8 +73,8 @@ async def create_estimate(estimate_data: EstimateCreate) -> Dict[str, Any]:
         # Convert to dict and add timestamp
         estimate_dict = estimate_data.model_dump()
         
-        # Set created_at to current time always
-        estimate_dict["created_at"] = datetime.now()
+        # Set created_at to current UTC time always
+        estimate_dict["created_at"] = datetime.now(timezone.utc)
         
         # Generate unique estimate ID and sequential estimate number
         estimate_dict["estimate_id"] = f"EST-{uuid.uuid4().hex[:8].upper()}"
