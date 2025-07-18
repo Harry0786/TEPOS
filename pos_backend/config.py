@@ -11,7 +11,7 @@ class Config:
     
     # CORS origins (Production)
     CORS_ORIGINS = [
-        "https://pos-2wc9.onrender.com"
+        "https://tepos.onrender.com"
     ]
     
     # Server configuration

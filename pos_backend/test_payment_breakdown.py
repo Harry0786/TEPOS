@@ -10,7 +10,7 @@ from datetime import datetime
 import time
 
 # Configuration
-BASE_URL = "https://pos-backend-8j8k.onrender.com"  # Update with your actual backend URL
+BASE_URL = "https://tepos.onrender.com"  # Update with your actual backend URL
 # BASE_URL = "http://localhost:8000"  # For local testing
 
 def test_today_report_payment_breakdown():

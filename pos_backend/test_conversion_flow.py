@@ -9,7 +9,7 @@ import time
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://pos-2wc9.onrender.com"  # Your Render backend URL
+BASE_URL = "https://tepos.onrender.com"  # Your Render backend URL
 API_BASE = f"{BASE_URL}/api"
 
 def make_request(url, method="GET", data=None, timeout=30):

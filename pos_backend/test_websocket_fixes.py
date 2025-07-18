@@ -9,7 +9,7 @@ import time
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://pos-2wc9.onrender.com/api"
+BASE_URL = "https://tepos.onrender.com/api"
 TIMEOUT = 30
 
 def test_websocket_connection():
