@@ -13,6 +13,7 @@ import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:flutter/services.dart';
 import 'inventory_screen.dart';
+import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -411,52 +412,45 @@ class _HomeScreenState extends State<HomeScreen>
 
   // Optimized computed values with single pass calculation
   Map<String, dynamic> get _orderStats {
-    if (_cachedOrderStats != null && !_cacheInvalidated) {
-      return _cachedOrderStats!;
-    }
-
-    _performanceService.startOperation('HomeScreen.computeStats');
-
     double totalSales = 0.0;
     int totalOrders = 0;
-    int totalEstimates = _estimates.length;
+    int totalEstimates = 0;
     int completedSales = 0;
 
-    try {
-      // Only count today's completed orders for totalSales and totalOrders
-      for (final order in _orders) {
-        final status = order['status']?.toString().toLowerCase() ?? '';
-        final createdAt = _parseDate(order['created_at']);
-        if (status == 'completed' && _isToday(createdAt)) {
-          completedSales++;
-          totalOrders++;
-          final amount = order['amount'];
-          final total = order['total'];
-          final value = (amount ?? total ?? 0.0);
-          totalSales += (value is num ? value.toDouble() : 0.0);
-        }
+    final now = DateTime.now();
+
+    for (final order in _orders) {
+      final status = (order['status'] ?? '').toString().toLowerCase();
+      final createdAt = _parseDate(order['created_at']);
+      final isToday =
+          createdAt.year == now.year &&
+          createdAt.month == now.month &&
+          createdAt.day == now.day;
+      if (status == 'completed' && isToday) {
+        completedSales++;
+        totalOrders++;
+        final amount = order['amount'] ?? order['total'] ?? 0.0;
+        totalSales += (amount is num) ? amount.toDouble() : 0.0;
       }
-      // Estimates are counted separately, not as orders
-    } catch (e) {
-      print('❌ Error computing order stats: $e');
-      // Use safe defaults
-      totalSales = 0.0;
-      totalOrders = 0;
-      totalEstimates = _estimates.length;
-      completedSales = 0;
     }
 
-    _cachedOrderStats = {
+    for (final estimate in _estimates) {
+      final createdAt = _parseDate(estimate['created_at']);
+      final isToday =
+          createdAt.year == now.year &&
+          createdAt.month == now.month &&
+          createdAt.day == now.day;
+      if (isToday) {
+        totalEstimates++;
+      }
+    }
+
+    return {
       'totalSales': totalSales,
       'totalOrders': totalOrders,
       'totalEstimates': totalEstimates,
       'completedSales': completedSales,
     };
-
-    _cacheInvalidated = false;
-    _performanceService.endOperation('HomeScreen.computeStats');
-
-    return _cachedOrderStats!;
   }
 
   double get _totalSales => _orderStats['totalSales'];
@@ -518,13 +512,14 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   DateTime _parseDate(dynamic dateValue) {
-    if (dateValue == null) return DateTime.now();
-    if (dateValue is DateTime) return dateValue;
+    if (dateValue == null) return DateTime(1970); // clearly invalid
+    if (dateValue is DateTime) return dateValue.toLocal();
     try {
-      return DateTime.tryParse(dateValue.toString()) ?? DateTime.now();
-    } catch (e) {
-      print('❌ Error parsing date: $dateValue, error: $e');
-      return DateTime.now();
+      // Try parsing ISO8601 and convert to local time
+      return DateTime.tryParse(dateValue.toString())?.toLocal() ??
+          DateTime(1970);
+    } catch (_) {
+      return DateTime(1970);
     }
   }
 
@@ -1584,19 +1579,12 @@ class _HomeScreenState extends State<HomeScreen>
     final String dateTimeStr = item['created_at']?.toString() ?? '';
     DateTime? dateTime;
     try {
-      dateTime = DateTime.tryParse(dateTimeStr);
+      dateTime = DateTime.tryParse(dateTimeStr)?.toLocal();
     } catch (_) {
       dateTime = null;
     }
     String formattedTime =
-        dateTime != null
-            ? (dateTime.hour % 12 == 0
-                    ? '12'
-                    : (dateTime.hour % 12).toString().padLeft(2, '0')) +
-                ':' +
-                dateTime.minute.toString().padLeft(2, '0') +
-                (dateTime.hour < 12 ? ' AM' : ' PM')
-            : '';
+        dateTime != null ? DateFormat('hh:mm a').format(dateTime) : '';
 
     return Container(
       padding: const EdgeInsets.all(12),

@@ -320,7 +320,7 @@ async def convert_estimate_to_order(estimate_id: str, payment_mode: str = "Cash"
             "discount_percentage": estimate.get("discount_percentage"),
             "total": estimate["total"],
             "payment_mode": payment_mode,
-            "created_at": datetime.now(),
+            "created_at": datetime.now(timezone.utc),
             "source_estimate_id": estimate["estimate_id"],
             "source_estimate_number": estimate["estimate_number"]
         }
