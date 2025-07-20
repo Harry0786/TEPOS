@@ -1,12 +1,7 @@
 // Microsoft Visual C++ generated resource script.
 //
 #pragma code_page(65001)
-#include "            VALUE "FileDescription", "TEPOS" "\0"
-            VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "TEPOS" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2023 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "point_of_scale.exe" "\0"
-            VALUE "ProductName", "TEPOS" "\0"ce.h"
+#include "resource.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////

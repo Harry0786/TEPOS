@@ -513,10 +513,13 @@ class _HomeScreenState extends State<HomeScreen>
 
   DateTime _parseDate(dynamic dateValue) {
     if (dateValue == null) return DateTime(1970); // clearly invalid
-    if (dateValue is DateTime) return dateValue.toLocal();
+    if (dateValue is DateTime)
+      return dateValue.toUtc().add(const Duration(hours: 5, minutes: 30));
     try {
-      // Try parsing ISO8601 and convert to local time
-      return DateTime.tryParse(dateValue.toString())?.toLocal() ??
+      // Try parsing ISO8601 and convert to IST
+      return DateTime.tryParse(
+            dateValue.toString(),
+          )?.toUtc().add(const Duration(hours: 5, minutes: 30)) ??
           DateTime(1970);
     } catch (_) {
       return DateTime(1970);
@@ -1579,7 +1582,9 @@ class _HomeScreenState extends State<HomeScreen>
     final String dateTimeStr = item['created_at']?.toString() ?? '';
     DateTime? dateTime;
     try {
-      dateTime = DateTime.tryParse(dateTimeStr)?.toLocal();
+      dateTime = DateTime.tryParse(
+        dateTimeStr,
+      )?.toUtc().add(const Duration(hours: 5, minutes: 30));
     } catch (_) {
       dateTime = null;
     }

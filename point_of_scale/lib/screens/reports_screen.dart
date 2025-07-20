@@ -690,7 +690,7 @@ class _ReportsScreenState extends State<ReportsScreen>
             DateFormat('MMM dd').format(
               DateTime.parse(
                 item['created_at'] ?? DateTime.now().toIso8601String(),
-              ),
+              ).toUtc().add(const Duration(hours: 5, minutes: 30)),
             ),
             style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
           ),

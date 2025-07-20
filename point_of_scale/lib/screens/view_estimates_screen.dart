@@ -285,7 +285,11 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
     if (date == null) return 'N/A';
     if (date is DateTime) return date.toString().split(' ')[0];
     if (date is String)
-      return DateTime.tryParse(date)?.toString().split(' ')[0] ??
+      return DateTime.tryParse(date)
+              ?.toUtc()
+              .add(const Duration(hours: 5, minutes: 30))
+              ?.toString()
+              .split(' ')[0] ??
           date.split('T').first;
     return 'N/A';
   }
@@ -487,10 +491,14 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                                                   '';
                                               DateTime? dateTime;
                                               try {
-                                                dateTime =
-                                                    DateTime.tryParse(
-                                                      dateTimeStr,
-                                                    )?.toLocal();
+                                                dateTime = DateTime.tryParse(
+                                                  dateTimeStr,
+                                                )?.toUtc().add(
+                                                  const Duration(
+                                                    hours: 5,
+                                                    minutes: 30,
+                                                  ),
+                                                );
                                               } catch (_) {
                                                 dateTime = null;
                                               }
@@ -569,7 +577,9 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                         estimate['created_at']?.toString() ?? '';
                     DateTime? dateTime;
                     try {
-                      dateTime = DateTime.tryParse(dateTimeStr)?.toLocal();
+                      dateTime = DateTime.tryParse(
+                        dateTimeStr,
+                      )?.toUtc().add(const Duration(hours: 5, minutes: 30));
                     } catch (_) {
                       dateTime = null;
                     }

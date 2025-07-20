@@ -61,7 +61,8 @@ async def get_next_sale_number() -> str:
     except Exception as e:
         print(f"Error getting next sale number: {e}")
         # Fallback: use timestamp-based number
-        return f"#{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        ist = tz.gettz('Asia/Kolkata')
+        return f"#{datetime.now(ist).strftime('%Y%m%d%H%M%S')}"
 
 @router.post("/create-sale", status_code=status.HTTP_201_CREATED)
 async def create_completed_sale(order_data: OrderCreate) -> Dict[str, Any]:
@@ -88,7 +89,7 @@ async def create_completed_sale(order_data: OrderCreate) -> Dict[str, Any]:
             order_dict["sale_number"] = await get_next_sale_number()
         except Exception:
             print("⚠️ Error getting sale number, using fallback")
-            order_dict["sale_number"] = f"#{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            order_dict["sale_number"] = f"#{datetime.now(ist).strftime('%Y%m%d%H%M%S')}"
         
         order_dict["status"] = "Completed"  # Mark as completed sale
         

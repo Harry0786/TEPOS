@@ -1144,6 +1144,8 @@ class PdfService {
                             DateTime.parse(
                               item['created_at'] ??
                                   DateTime.now().toIso8601String(),
+                            ).toUtc().add(
+                              const Duration(hours: 5, minutes: 30),
                             ),
                           ),
                           style: pw.TextStyle(

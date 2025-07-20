@@ -62,7 +62,8 @@ async def get_next_estimate_number() -> str:
     except Exception as e:
         print(f"Error getting next estimate number: {e}")
         # Fallback: use timestamp-based number
-        return f"#{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        ist = tz.gettz('Asia/Kolkata')
+        return f"#{datetime.now(ist).strftime('%Y%m%d%H%M%S')}"
 
 @router.post("/create", status_code=status.HTTP_201_CREATED)
 async def create_estimate(estimate_data: EstimateCreate) -> Dict[str, Any]:

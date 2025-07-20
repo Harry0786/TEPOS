@@ -220,7 +220,9 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
                     final dateTimeStr = order['created_at']?.toString() ?? '';
                     DateTime? dateTime;
                     try {
-                      dateTime = DateTime.tryParse(dateTimeStr)?.toLocal();
+                      dateTime = DateTime.tryParse(
+                        dateTimeStr,
+                      )?.toUtc().add(const Duration(hours: 5, minutes: 30));
                     } catch (_) {
                       dateTime = null;
                     }
@@ -586,10 +588,14 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
                                                   '';
                                               DateTime? dateTime;
                                               try {
-                                                dateTime =
-                                                    DateTime.tryParse(
-                                                      dateTimeStr,
-                                                    )?.toLocal();
+                                                dateTime = DateTime.tryParse(
+                                                  dateTimeStr,
+                                                )?.toUtc().add(
+                                                  const Duration(
+                                                    hours: 5,
+                                                    minutes: 30,
+                                                  ),
+                                                );
                                               } catch (_) {
                                                 dateTime = null;
                                               }
