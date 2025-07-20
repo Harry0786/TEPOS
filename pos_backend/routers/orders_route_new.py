@@ -75,7 +75,7 @@ async def create_completed_sale(order_data: OrderCreate) -> Dict[str, Any]:
         # Convert to dict and add timestamp
         order_dict = order_data.model_dump()
         
-        # Set created_at to current IST time always
+        # Set created_at to current IST time always as a timezone-aware datetime
         ist = tz.gettz('Asia/Kolkata')
         order_dict["created_at"] = datetime.now(ist)
         print(f"[DEBUG] Order created_at (IST): {order_dict['created_at']}")
@@ -256,6 +256,11 @@ async def get_orders_and_estimates_separate() -> Dict[str, Any]:
         for order in orders:
             order["_id"] = str(order["_id"])
         
+        # In all endpoints that return orders, convert created_at to IST before returning
+        for order in orders:
+            if isinstance(order["created_at"], datetime):
+                order["created_at"] = order["created_at"].astimezone(tz.gettz('Asia/Kolkata'))
+        
         return {
             "estimates": {
                 "count": len(estimates),
@@ -295,6 +300,11 @@ async def get_orders_only() -> Dict[str, Any]:
         for order in orders:
             order["_id"] = str(order["_id"])
         
+        # In all endpoints that return orders, convert created_at to IST before returning
+        for order in orders:
+            if isinstance(order["created_at"], datetime):
+                order["created_at"] = order["created_at"].astimezone(tz.gettz('Asia/Kolkata'))
+        
         return {
             "orders": {
                 "count": len(orders),
@@ -327,6 +337,10 @@ async def get_order_by_id(order_id: str) -> Dict[str, Any]:
         # Convert ObjectId to string
         order["_id"] = str(order["_id"])
             
+        # Convert created_at to IST
+        if isinstance(order["created_at"], datetime):
+            order["created_at"] = order["created_at"].astimezone(tz.gettz('Asia/Kolkata'))
+            
         return order
         
     except HTTPException:
@@ -354,6 +368,10 @@ async def get_order_by_number(sale_number: str) -> Dict[str, Any]:
         
         # Convert ObjectId to string
         order["_id"] = str(order["_id"])
+            
+        # Convert created_at to IST
+        if isinstance(order["created_at"], datetime):
+            order["created_at"] = order["created_at"].astimezone(tz.gettz('Asia/Kolkata'))
             
         return order
         

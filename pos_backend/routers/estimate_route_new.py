@@ -75,7 +75,7 @@ async def create_estimate(estimate_data: EstimateCreate) -> Dict[str, Any]:
         # Convert to dict and add timestamp
         estimate_dict = estimate_data.model_dump()
         
-        # Set created_at to current IST time always
+        # Set created_at to current IST time always as a timezone-aware datetime
         ist = tz.gettz('Asia/Kolkata')
         estimate_dict["created_at"] = datetime.now(ist)
         print(f"[DEBUG] Estimate created_at (IST): {estimate_dict['created_at']}")
@@ -169,6 +169,11 @@ async def get_all_estimates() -> List[Dict[str, Any]]:
             if "linked_order_number" not in estimate:
                 estimate["linked_order_number"] = None
         
+        # In all endpoints that return estimates, convert created_at to IST before returning
+        for estimate in estimates:
+            if isinstance(estimate["created_at"], datetime):
+                estimate["created_at"] = estimate["created_at"].astimezone(tz.gettz('Asia/Kolkata'))
+        
         return estimates
         
     except Exception as e:
@@ -202,6 +207,10 @@ async def get_estimate_by_number(estimate_number: str) -> Dict[str, Any]:
             estimate["linked_order_id"] = None
         if "linked_order_number" not in estimate:
             estimate["linked_order_number"] = None
+            
+        # In all endpoints that return estimates, convert created_at to IST before returning
+        if isinstance(estimate["created_at"], datetime):
+            estimate["created_at"] = estimate["created_at"].astimezone(tz.gettz('Asia/Kolkata'))
             
         return estimate
         
@@ -238,6 +247,10 @@ async def get_estimate_by_id(estimate_id: str) -> Dict[str, Any]:
             estimate["linked_order_id"] = None
         if "linked_order_number" not in estimate:
             estimate["linked_order_number"] = None
+            
+        # In all endpoints that return estimates, convert created_at to IST before returning
+        if isinstance(estimate["created_at"], datetime):
+            estimate["created_at"] = estimate["created_at"].astimezone(tz.gettz('Asia/Kolkata'))
             
         return estimate
         
@@ -399,6 +412,11 @@ async def get_converted_estimates() -> List[Dict[str, Any]]:
             estimate["id"] = str(estimate["_id"])
             del estimate["_id"]
         
+        # In all endpoints that return estimates, convert created_at to IST before returning
+        for estimate in estimates:
+            if isinstance(estimate["created_at"], datetime):
+                estimate["created_at"] = estimate["created_at"].astimezone(tz.gettz('Asia/Kolkata'))
+        
         return estimates
         
     except Exception as e:
@@ -422,6 +440,11 @@ async def get_pending_estimates() -> List[Dict[str, Any]]:
         for estimate in estimates:
             estimate["id"] = str(estimate["_id"])
             del estimate["_id"]
+        
+        # In all endpoints that return estimates, convert created_at to IST before returning
+        for estimate in estimates:
+            if isinstance(estimate["created_at"], datetime):
+                estimate["created_at"] = estimate["created_at"].astimezone(tz.gettz('Asia/Kolkata'))
         
         return estimates
         
