@@ -34,11 +34,6 @@ class _HomeScreenState extends State<HomeScreen>
   // Performance monitoring
   final PerformanceService _performanceService = PerformanceService();
 
-  // Connection status
-  bool _isConnected = false;
-  String _connectionStatus = 'Connecting...';
-  DateTime? _lastConnectionTime;
-
   // Auto refresh timers - optimized
   Timer? _periodicRefreshTimer;
   DateTime? _lastAppResumeTime;
@@ -60,17 +55,41 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
-    // Cancel timers
-    _periodicRefreshTimer?.cancel();
+    print('🔄 Disposing HomeScreen...');
 
-    // Dispose services
-    _webSocketService.dispose();
-    _performanceService.dispose();
+    // Cancel timers safely
+    try {
+      _periodicRefreshTimer?.cancel();
+    } catch (e) {
+      print('⚠️ Error canceling periodic refresh timer: $e');
+    }
 
-    // Remove observer
-    WidgetsBinding.instance.removeObserver(this);
+    // Dispose services safely
+    try {
+      _webSocketService.dispose();
+    } catch (e) {
+      print('⚠️ Error disposing WebSocket service: $e');
+    }
+
+    try {
+      _performanceService.dispose();
+    } catch (e) {
+      print('⚠️ Error disposing performance service: $e');
+    }
+
+    // Remove observer safely
+    try {
+      WidgetsBinding.instance.removeObserver(this);
+    } catch (e) {
+      print('⚠️ Error removing app lifecycle observer: $e');
+    }
+
+    // Clear caches
+    _widgetCache.clear();
+    _cacheInvalidated = true;
 
     super.dispose();
+    print('✅ HomeScreen disposed successfully');
   }
 
   @override
@@ -114,45 +133,47 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _initializeWebSocket() {
-    _webSocketService = WebSocketService(serverUrl: ApiService.webSocketUrl);
-    _webSocketService.connect();
+    try {
+      _webSocketService = WebSocketService(serverUrl: ApiService.webSocketUrl);
+      _webSocketService.connect();
 
-    // Monitor connection status periodically
-    Timer.periodic(const Duration(seconds: 2), (timer) {
-      if (mounted) {
-        setState(() {
-          _isConnected = _webSocketService.isConnected;
-          _connectionStatus = _isConnected ? 'Connected' : 'Disconnected';
-          if (_isConnected && _lastConnectionTime == null) {
-            _lastConnectionTime = DateTime.now();
+      // Handle structured WebSocket messages for efficient updates
+      _webSocketService.messageStream.listen(
+        (message) {
+          if (mounted) {
+            _handleWebSocketMessage(message);
           }
-        });
-      }
-    });
+        },
+        onError: (error) {
+          print('❌ WebSocket message stream error: $error');
+        },
+      );
 
-    // Handle structured WebSocket messages for efficient updates
-    _webSocketService.messageStream.listen((message) {
-      if (mounted) {
-        _handleWebSocketMessage(message);
-      }
-    });
-
-    // Handle legacy messages for backward compatibility
-    _webSocketService.legacyMessageStream.listen((message) {
-      if (message == 'estimate_updated' ||
-          message == 'order_updated' ||
-          message == 'sale_completed' ||
-          message == 'estimate_created' ||
-          message == 'estimate_deleted' ||
-          message == 'estimate_converted_to_order') {
-        if (mounted) {
-          print(
-            '🔄 Legacy WebSocket message received: $message - refreshing data...',
-          );
-          _loadData();
-        }
-      }
-    });
+      // Handle legacy messages for backward compatibility
+      _webSocketService.legacyMessageStream.listen(
+        (message) {
+          if (message == 'estimate_updated' ||
+              message == 'order_updated' ||
+              message == 'sale_completed' ||
+              message == 'estimate_created' ||
+              message == 'estimate_deleted' ||
+              message == 'estimate_converted_to_order') {
+            if (mounted) {
+              print(
+                '🔄 Legacy WebSocket message received: $message - refreshing data...',
+              );
+              _loadData();
+            }
+          }
+        },
+        onError: (error) {
+          print('❌ WebSocket legacy message stream error: $error');
+        },
+      );
+    } catch (e) {
+      print('❌ Error initializing WebSocket: $e');
+      // Continue without WebSocket - app will still work
+    }
   }
 
   void _handleWebSocketMessage(WebSocketMessage message) {
@@ -535,9 +556,9 @@ class _HomeScreenState extends State<HomeScreen>
           title: Row(
             children: [
               Icon(
-                _isConnected ? Icons.wifi : Icons.wifi_off,
+                _webSocketService.isConnected ? Icons.wifi : Icons.wifi_off,
                 color:
-                    _isConnected
+                    _webSocketService.isConnected
                         ? const Color(0xFF4CAF50)
                         : const Color(0xFFFF5722),
                 size: 24,
@@ -555,18 +576,12 @@ class _HomeScreenState extends State<HomeScreen>
             children: [
               _buildStatusRow(
                 'Status',
-                _isConnected ? 'Connected' : 'Disconnected',
-                _isConnected
+                _webSocketService.isConnected ? 'Connected' : 'Disconnected',
+                _webSocketService.isConnected
                     ? const Color(0xFF4CAF50)
                     : const Color(0xFFFF5722),
               ),
               _buildStatusRow('Server', ApiService.webSocketUrl, Colors.grey),
-              if (_lastConnectionTime != null)
-                _buildStatusRow(
-                  'Last Connected',
-                  _formatTime(_lastConnectionTime!),
-                  Colors.grey,
-                ),
               _buildStatusRow(
                 'WebSocket',
                 _webSocketService.isConnected ? 'Active' : 'Inactive',
@@ -581,7 +596,7 @@ class _HomeScreenState extends State<HomeScreen>
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Close', style: TextStyle(color: Colors.grey)),
             ),
-            if (!_isConnected)
+            if (!_webSocketService.isConnected)
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6B8E7F),
@@ -720,20 +735,6 @@ class _HomeScreenState extends State<HomeScreen>
                   style: TextStyle(color: Color(0xFF9E9E9E), fontSize: 11),
                 ),
               ],
-            ),
-          ),
-          // Connection status dot
-          Container(
-            margin: const EdgeInsets.only(left: 8, right: 4),
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(
-              color:
-                  _isConnected
-                      ? const Color(0xFF4CAF50)
-                      : const Color(0xFFFF5252),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.black26, width: 1),
             ),
           ),
         ],

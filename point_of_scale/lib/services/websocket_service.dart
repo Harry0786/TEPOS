@@ -70,10 +70,14 @@ class WebSocketService {
 
   // Connection management
   int _reconnectAttempts = 0;
-  static const int _maxReconnectAttempts = 5;
-  static const Duration _initialReconnectDelay = Duration(seconds: 2);
+  static const int _maxReconnectAttempts = 10; // Increased from 5
+  static const Duration _initialReconnectDelay = Duration(
+    seconds: 1,
+  ); // Reduced from 2
   static const Duration _maxReconnectDelay = Duration(seconds: 30);
-  static const Duration _heartbeatInterval = Duration(seconds: 30);
+  static const Duration _heartbeatInterval = Duration(
+    seconds: 15,
+  ); // Reduced from 30
 
   // Performance optimization
   static const Duration _debounceDelay = Duration(milliseconds: 300);
@@ -84,7 +88,7 @@ class WebSocketService {
   // Connection health monitoring
   bool _isHealthy = false;
   int _consecutiveFailures = 0;
-  static const int _maxConsecutiveFailures = 3;
+  static const int _maxConsecutiveFailures = 5; // Increased from 3
 
   bool get isConnected => _isConnected && _isHealthy;
   bool get isHealthy => _isHealthy;
@@ -110,15 +114,23 @@ class WebSocketService {
 
     try {
       print('🔌 Connecting to WebSocket: $_serverUrl');
+
+      // Close existing connection if any
+      _channel?.sink.close();
+      _channel = null;
+
       _channel = WebSocketChannel.connect(Uri.parse(_serverUrl));
       _isConnected = true;
-      _isHealthy = true;
-      _consecutiveFailures = 0;
-      _reconnectAttempts = 0;
       _lastConnectionTime = DateTime.now();
 
+      // Listen to the stream with error handling
       _channel!.stream.listen(
         (message) {
+          // Reset failure counters on successful message
+          _consecutiveFailures = 0;
+          _reconnectAttempts = 0;
+          _isHealthy = true;
+
           // Check if service is still active before handling message
           if (_isConnected && _messageController?.isClosed == false) {
             _handleMessage(message.toString());
@@ -132,6 +144,8 @@ class WebSocketService {
           print('🔌 WebSocket connection closed');
           _handleConnectionFailure();
         },
+        cancelOnError:
+            false, // Don't cancel on error, let us handle reconnection
       );
 
       // Start heartbeat to monitor connection health
@@ -145,18 +159,19 @@ class WebSocketService {
   }
 
   void _handleMessage(String message) {
+    // Reset health indicators on successful message
+    _isHealthy = true;
+    _consecutiveFailures = 0;
+
     // Debounce messages to prevent spam
     if (_lastMessage == message &&
         _lastMessageTime != null &&
         DateTime.now().difference(_lastMessageTime!) < _debounceDelay) {
-      print('🔄 Debouncing duplicate message: $message');
       return;
     }
 
     _lastMessage = message;
     _lastMessageTime = DateTime.now();
-
-    print('📨 WebSocket message received: $message');
 
     // Cancel any existing debounce timer
     _debounceTimer?.cancel();
@@ -177,10 +192,6 @@ class WebSocketService {
             // Handle structured messages
             _messageController?.add(wsMessage);
           }
-        } else {
-          print(
-            '⚠️ WebSocket controllers are closed, skipping message: $message',
-          );
         }
       } catch (e) {
         print('❌ Error parsing WebSocket message: $e');
@@ -199,12 +210,29 @@ class WebSocketService {
 
     print('🔌 Connection failure #$_consecutiveFailures');
 
+    // Close the existing channel
+    _channel?.sink.close();
+    _channel = null;
+
     if (_consecutiveFailures >= _maxConsecutiveFailures) {
-      print('⚠️ Too many consecutive failures, stopping reconnection attempts');
+      print('⚠️ Too many consecutive failures, resetting connection state');
+      _resetConnectionState();
       return;
     }
 
     _scheduleReconnect();
+  }
+
+  void _resetConnectionState() {
+    _channel?.sink.close();
+    _channel = null;
+    _isConnected = false;
+    _isHealthy = false;
+    _consecutiveFailures = 0;
+    _reconnectAttempts = 0;
+    _reconnectTimer?.cancel();
+    _heartbeatTimer?.cancel();
+    _debounceTimer?.cancel();
   }
 
   void _startHeartbeat() {
@@ -214,7 +242,6 @@ class WebSocketService {
         try {
           // Send a ping to check connection health
           _channel!.sink.add('ping');
-          print('💓 WebSocket heartbeat sent');
         } catch (e) {
           print('❌ Heartbeat failed: $e');
           _handleConnectionFailure();
@@ -225,12 +252,7 @@ class WebSocketService {
 
   void disconnect() {
     print('🔌 Disconnecting WebSocket');
-    _isConnected = false;
-    _isHealthy = false;
-    _reconnectTimer?.cancel();
-    _heartbeatTimer?.cancel();
-    _debounceTimer?.cancel();
-    _channel?.sink.close(status.goingAway);
+    _resetConnectionState();
   }
 
   void _scheduleReconnect() {
@@ -238,15 +260,14 @@ class WebSocketService {
 
     // Exponential backoff with jitter
     final delay = Duration(
-      seconds: (_initialReconnectDelay.inSeconds * (1 << _reconnectAttempts))
-          .clamp(1, _maxReconnectDelay.inSeconds),
+      milliseconds: (_initialReconnectDelay.inMilliseconds *
+              (1 << _reconnectAttempts))
+          .clamp(1, _maxReconnectDelay.inMilliseconds),
     );
 
     // Add jitter to prevent thundering herd
-    final jitter = Duration(milliseconds: (DateTime.now().millisecond % 1000));
-    final totalDelay = Duration(
-      milliseconds: delay.inMilliseconds + jitter.inMilliseconds,
-    );
+    final jitter = Duration(milliseconds: (DateTime.now().millisecond % 500));
+    final totalDelay = delay + jitter;
 
     print(
       '🔄 Scheduling WebSocket reconnection in ${totalDelay.inSeconds} seconds... (attempt ${_reconnectAttempts + 1})',
@@ -255,22 +276,36 @@ class WebSocketService {
     _reconnectTimer = Timer(totalDelay, () {
       if (!_isConnected) {
         _reconnectAttempts++;
-        print(
-          '🔄 Attempting to reconnect WebSocket... (attempt $_reconnectAttempts)',
-        );
-        connect();
+        if (_reconnectAttempts <= _maxReconnectAttempts) {
+          print(
+            '🔄 Attempting to reconnect WebSocket... (attempt $_reconnectAttempts)',
+          );
+          connect();
+        } else {
+          print('⚠️ Max reconnection attempts reached, giving up');
+          _resetConnectionState();
+        }
       }
     });
   }
 
   void dispose() {
     print('🔌 Disposing WebSocket service');
-    disconnect();
 
-    // Cancel timers first
+    // Cancel all timers first
     _reconnectTimer?.cancel();
     _heartbeatTimer?.cancel();
     _debounceTimer?.cancel();
+
+    // Close the WebSocket connection
+    try {
+      _channel?.sink.close();
+    } catch (e) {
+      print('⚠️ Error closing WebSocket channel: $e');
+    }
+
+    // Reset connection state
+    _resetConnectionState();
 
     // Close controllers safely
     try {
@@ -288,6 +323,8 @@ class WebSocketService {
     _messageController = null;
     _legacyMessageController = null;
     _channel = null;
+
+    print('✅ WebSocket service disposed successfully');
   }
 
   // Get connection statistics
@@ -298,6 +335,7 @@ class WebSocketService {
       'reconnectAttempts': _reconnectAttempts,
       'consecutiveFailures': _consecutiveFailures,
       'lastConnectionTime': _lastConnectionTime?.toIso8601String(),
+      'lastMessageTime': _lastMessageTime?.toIso8601String(),
       'serverUrl': _serverUrl,
     };
   }

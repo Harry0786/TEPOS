@@ -23,33 +23,49 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
   @override
   void initState() {
     super.initState();
-    _webSocketService = WebSocketService(serverUrl: ApiService.webSocketUrl);
-    _webSocketService.connect();
 
-    // Handle structured WebSocket messages for efficient updates
-    _webSocketService.messageStream.listen((message) {
-      if (mounted) {
-        _handleWebSocketMessage(message);
-      }
-    });
+    try {
+      _webSocketService = WebSocketService(serverUrl: ApiService.webSocketUrl);
+      _webSocketService.connect();
 
-    // Handle legacy messages for backward compatibility
-    _webSocketService.legacyMessageStream.listen((message) {
-      if (message == 'order_updated' ||
-          message == 'estimate_updated' ||
-          message == 'sale_completed' ||
-          message == 'estimate_created' ||
-          message == 'estimate_deleted' ||
-          message == 'estimate_converted_to_order') {
-        if (mounted) {
-          print(
-            '🔄 Legacy WebSocket message received: $message - refreshing orders...',
-          );
-          ApiService.clearCache();
-          _loadOrders();
-        }
-      }
-    });
+      // Handle structured WebSocket messages for efficient updates
+      _webSocketService.messageStream.listen(
+        (message) {
+          if (mounted) {
+            _handleWebSocketMessage(message);
+          }
+        },
+        onError: (error) {
+          print('❌ WebSocket message stream error: $error');
+        },
+      );
+
+      // Handle legacy messages for backward compatibility
+      _webSocketService.legacyMessageStream.listen(
+        (message) {
+          if (message == 'order_updated' ||
+              message == 'estimate_updated' ||
+              message == 'sale_completed' ||
+              message == 'estimate_created' ||
+              message == 'estimate_deleted' ||
+              message == 'estimate_converted_to_order') {
+            if (mounted) {
+              print(
+                '🔄 Legacy WebSocket message received: $message - refreshing orders...',
+              );
+              ApiService.clearCache();
+              _loadOrders();
+            }
+          }
+        },
+        onError: (error) {
+          print('❌ WebSocket legacy message stream error: $error');
+        },
+      );
+    } catch (e) {
+      print('❌ Error initializing WebSocket: $e');
+      // Continue without WebSocket - app will still work
+    }
 
     _loadOrders();
   }
@@ -152,15 +168,46 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
   }
 
   Future<void> _loadOrders() async {
+    if (!mounted) return;
+
     setState(() {
       _isLoading = true;
     });
-    final orders = await ApiService.fetchOrders(forceClearCache: true);
-    setState(() {
-      _orders = orders; // Show only actual orders (completed sales)
-      _filteredOrders = _orders;
-      _isLoading = false;
-    });
+
+    try {
+      final orders = await ApiService.fetchOrders(
+        forceClearCache: true,
+      ).timeout(
+        const Duration(seconds: 20),
+        onTimeout: () {
+          print('⚠️ Orders fetch timeout');
+          return <Map<String, dynamic>>[];
+        },
+      );
+
+      if (mounted) {
+        setState(() {
+          _orders = orders;
+          _filteredOrders = _orders;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error loading orders: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading orders: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _filterOrders() {
@@ -300,6 +347,51 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
               },
               child: const Text('Print PDF'),
             ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () async {
+                Navigator.of(context).pop();
+
+                // Show confirmation dialog
+                final shouldDelete = await showDialog<bool>(
+                  context: context,
+                  builder:
+                      (context) => AlertDialog(
+                        backgroundColor: const Color(0xFF1A1A1A),
+                        title: const Text(
+                          'Delete Order',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        content: const Text(
+                          'Are you sure you want to delete this order? This action cannot be undone. If this order was created from an estimate, the estimate will also be deleted.',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: const Text(
+                              'Cancel',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                            ),
+                            onPressed: () => Navigator.of(context).pop(true),
+                            child: const Text('Delete'),
+                          ),
+                        ],
+                      ),
+                );
+
+                if (shouldDelete == true && mounted) {
+                  await _deleteOrderSafely(order);
+                }
+              },
+              icon: const Icon(Icons.delete, size: 18),
+              label: const Text('Delete Order'),
+            ),
           ],
         );
       },
@@ -335,8 +427,94 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
 
   @override
   void dispose() {
-    _webSocketService.dispose();
+    try {
+      _webSocketService.dispose();
+    } catch (e) {
+      print('⚠️ Error disposing WebSocket service: $e');
+    }
     super.dispose();
+  }
+
+  Future<void> _deleteOrderSafely(Map<String, dynamic> order) async {
+    if (!mounted) return;
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => const AlertDialog(
+            backgroundColor: Color(0xFF1A1A1A),
+            content: Row(
+              children: [
+                CircularProgressIndicator(color: Colors.red),
+                SizedBox(width: 16),
+                Text(
+                  'Deleting order...',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+    );
+
+    try {
+      // Use a timeout to prevent hanging
+      final result = await ApiService.deleteOrder(
+        orderId: order['order_id'] ?? order['id'],
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          return {
+            'success': false,
+            'message': 'Request timeout - please try again',
+          };
+        },
+      );
+
+      if (!mounted) return;
+
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      if (result['success'] == true) {
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Order deleted successfully!'),
+            backgroundColor: Color(0xFF6B8E7F),
+          ),
+        );
+
+        // Refresh orders list
+        await _loadOrders();
+      } else {
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to delete: ${result['message'] ?? 'Unknown error'}',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting order: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+
+      print('❌ Error deleting order: $e');
+    }
   }
 
   Future<void> _printOrderPdf(Map<String, dynamic> order) async {
@@ -426,10 +604,7 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
       backgroundColor: const Color(0xFF0B0B0B),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text(
-          'Orders & Estimates',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text('View Orders', style: TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
       ),

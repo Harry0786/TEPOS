@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'screens/splash_screen.dart';
 
 void main() {
+  // Ensure Flutter is initialized before any other operations
   WidgetsFlutterBinding.ensureInitialized();
 
   // Set preferred orientations
@@ -20,6 +21,18 @@ void main() {
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
+
+  // Add error handling for uncaught exceptions
+  FlutterError.onError = (FlutterErrorDetails details) {
+    print('🚨 Flutter Error: ${details.exception}');
+    print('🚨 Stack trace: ${details.stack}');
+  };
+
+  // Add error handling for platform errors
+  FlutterError.onError = (FlutterErrorDetails details) {
+    print('🚨 Platform Error: ${details.exception}');
+    print('🚨 Stack trace: ${details.stack}');
+  };
 
   runApp(const MyApp());
 }
@@ -66,6 +79,8 @@ class MyApp extends StatelessWidget {
           child: child!,
         );
       },
+      // Add error handling for navigation
+      navigatorObservers: [RouteObserver<Route<dynamic>>()],
     );
   }
 }

@@ -695,6 +695,36 @@ class ApiService {
     });
   }
 
+  // Delete order
+  static Future<Map<String, dynamic>> deleteOrder({
+    required String orderId,
+  }) async {
+    return _retryRequest(() async {
+      final url = Uri.parse('$baseUrl/orders/$orderId');
+      print('🗑️ Deleting order: $url');
+      final response = await http
+          .delete(url)
+          .timeout(const Duration(seconds: 10)); // Reduced timeout
+      print('📡 Response status: ${response.statusCode}');
+      print('📡 Response body: ${response.body}');
+      final data = json.decode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        _invalidateCache('orders');
+        _invalidateCache(
+          'estimates',
+        ); // Also invalidate estimates cache in case linked estimate was deleted
+        return {'success': true, 'message': 'Order deleted successfully!'};
+      } else {
+        return {
+          'success': false,
+          'message':
+              data['detail'] ?? data['message'] ?? 'Failed to delete order',
+          'error': 'Server returned status ${response.statusCode}',
+        };
+      }
+    });
+  }
+
   // Customer Management API Methods
   static Future<List<Map<String, dynamic>>?> fetchCustomers() async {
     const cacheKey = 'customers';
