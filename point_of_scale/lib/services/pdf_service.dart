@@ -164,6 +164,19 @@ class PdfService {
                     ),
                     pw.SizedBox(width: 10),
                     pw.Container(
+                      width: 50,
+                      child: pw.Text(
+                        'Disc. %',
+                        style: pw.TextStyle(
+                          fontSize: 12,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.black,
+                        ),
+                        textAlign: pw.TextAlign.center,
+                      ),
+                    ),
+                    pw.SizedBox(width: 10),
+                    pw.Container(
                       width: 70,
                       child: pw.Text(
                         'Amount',
@@ -233,9 +246,21 @@ class PdfService {
                           ),
                           pw.SizedBox(width: 10),
                           pw.Container(
+                            width: 50,
+                            child: pw.Text(
+                              '${(item['discount'] ?? 0).toStringAsFixed(1)}%',
+                              style: pw.TextStyle(
+                                fontSize: 11,
+                                color: PdfColors.redAccent,
+                              ),
+                              textAlign: pw.TextAlign.center,
+                            ),
+                          ),
+                          pw.SizedBox(width: 10),
+                          pw.Container(
                             width: 70,
                             child: pw.Text(
-                              'Rs. ${(item['price'] * item['quantity']).toStringAsFixed(2)}',
+                              'Rs. ${((item['price'] * item['quantity']) * (1 - ((item['discount'] ?? 0) / 100))).toStringAsFixed(2)}',
                               style: pw.TextStyle(
                                 fontSize: 11,
                                 fontWeight: pw.FontWeight.bold,
@@ -488,6 +513,19 @@ class PdfService {
                     ),
                     pw.SizedBox(width: 10),
                     pw.Container(
+                      width: 50,
+                      child: pw.Text(
+                        'Disc. %',
+                        style: pw.TextStyle(
+                          fontSize: 12,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.black,
+                        ),
+                        textAlign: pw.TextAlign.center,
+                      ),
+                    ),
+                    pw.SizedBox(width: 10),
+                    pw.Container(
                       width: 70,
                       child: pw.Text(
                         'Amount',
@@ -557,9 +595,21 @@ class PdfService {
                           ),
                           pw.SizedBox(width: 10),
                           pw.Container(
+                            width: 50,
+                            child: pw.Text(
+                              '${(item['discount'] ?? 0).toStringAsFixed(1)}%',
+                              style: pw.TextStyle(
+                                fontSize: 11,
+                                color: PdfColors.redAccent,
+                              ),
+                              textAlign: pw.TextAlign.center,
+                            ),
+                          ),
+                          pw.SizedBox(width: 10),
+                          pw.Container(
                             width: 70,
                             child: pw.Text(
-                              'Rs. ${(item['price'] * item['quantity']).toStringAsFixed(2)}',
+                              'Rs. ${((item['price'] * item['quantity']) * (1 - ((item['discount'] ?? 0) / 100))).toStringAsFixed(2)}',
                               style: pw.TextStyle(
                                 fontSize: 11,
                                 fontWeight: pw.FontWeight.bold,

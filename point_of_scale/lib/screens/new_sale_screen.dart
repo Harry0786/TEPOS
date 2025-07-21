@@ -27,6 +27,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _quantityController = TextEditingController();
+  // 1. Add discount controller for add/edit dialogs
+  final TextEditingController _productDiscountController =
+      TextEditingController();
 
   // Discount variables
   double _discountAmount = 0.0;
@@ -81,6 +84,15 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     _nameController.clear();
     _priceController.clear();
     _quantityController.clear();
+    _productDiscountController.text = '0';
+
+    final FocusNode discountFocusNode = FocusNode();
+    discountFocusNode.addListener(() {
+      if (discountFocusNode.hasFocus &&
+          _productDiscountController.text == '0') {
+        _productDiscountController.clear();
+      }
+    });
 
     showDialog(
       context: context,
@@ -103,6 +115,27 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                   'Quantity',
                   _quantityController,
                   isNumber: true,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _productDiscountController,
+                  focusNode: discountFocusNode,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Discount (%)',
+                    labelStyle: TextStyle(color: Colors.grey[400]),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Color(0xFF2A2A2A)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Color(0xFF6B8E7F)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFF0D0D0D),
+                  ),
                 ),
               ],
             ),
@@ -173,6 +206,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
 
     final double? price = double.tryParse(_priceController.text);
     final int? quantity = int.tryParse(_quantityController.text);
+    double discount = double.tryParse(_productDiscountController.text) ?? 0.0;
+    if (discount < 0) discount = 0.0;
+    if (discount > 100) discount = 100.0;
 
     if (price == null || quantity == null || quantity <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -191,6 +227,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         'name': _nameController.text,
         'price': price,
         'quantity': quantity,
+        'discount': discount,
       });
       _invalidateCache();
     });
@@ -208,7 +245,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     _cachedSubtotal = _cartItems.fold<double>(0.0, (sum, item) {
       final price = (item['price'] as num?)?.toDouble() ?? 0.0;
       final quantity = (item['quantity'] as num?)?.toInt() ?? 0;
-      return sum + (price * quantity);
+      final discount = (item['discount'] as num?)?.toDouble() ?? 0.0;
+      return sum + ((price * quantity) * (1 - (discount / 100)));
     });
 
     _performanceService.endOperation('NewSaleScreen.computeSubtotal');
@@ -265,6 +303,16 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     final TextEditingController quantityController = TextEditingController(
       text: item['quantity'].toString(),
     );
+    final TextEditingController discountController = TextEditingController(
+      text: (item['discount'] ?? 0).toString(),
+    );
+
+    final FocusNode editDiscountFocusNode = FocusNode();
+    editDiscountFocusNode.addListener(() {
+      if (editDiscountFocusNode.hasFocus && discountController.text == '0') {
+        discountController.clear();
+      }
+    });
 
     showDialog(
       context: context,
@@ -287,6 +335,27 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                   'Quantity',
                   quantityController,
                   isNumber: true,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: discountController,
+                  focusNode: editDiscountFocusNode,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Discount (%)',
+                    labelStyle: TextStyle(color: Colors.grey[400]),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Color(0xFF2A2A2A)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Color(0xFF6B8E7F)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFF0D0D0D),
+                  ),
                 ),
               ],
             ),
@@ -313,6 +382,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                   nameController,
                   priceController,
                   quantityController,
+                  discountController,
                 );
                 Navigator.of(context).pop();
               },
@@ -331,6 +401,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     TextEditingController nameController,
     TextEditingController priceController,
     TextEditingController quantityController,
+    TextEditingController discountController,
   ) {
     _performanceService.startOperation('NewSaleScreen.updateItem');
 
@@ -348,6 +419,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
 
     final double? price = double.tryParse(priceController.text);
     final int? quantity = int.tryParse(quantityController.text);
+    double discount = double.tryParse(discountController.text) ?? 0.0;
+    if (discount < 0) discount = 0.0;
+    if (discount > 100) discount = 100.0;
 
     if (price == null || quantity == null || quantity <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -365,6 +439,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         _cartItems[index]['name'] = nameController.text;
         _cartItems[index]['price'] = price;
         _cartItems[index]['quantity'] = quantity;
+        _cartItems[index]['discount'] = discount;
       }
       _invalidateCache();
     });
@@ -691,7 +766,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            '${item['name']} x${item['quantity']}',
+                            '${item['name']} x${item['quantity']} (${(item['discount'] ?? 0).toStringAsFixed(1)}% off)',
                             style: TextStyle(
                               color: Colors.grey[300],
                               fontSize: 12,
@@ -699,7 +774,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                           ),
                         ),
                         Text(
-                          'Rs. ${(item['price'] * item['quantity']).toStringAsFixed(2)}',
+                          'Rs. ${((item['price'] * item['quantity']) * (1 - ((item['discount'] ?? 0) / 100))).toStringAsFixed(2)}',
                           style: TextStyle(
                             color: Colors.grey[300],
                             fontSize: 12,
@@ -2098,6 +2173,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     _nameController.dispose();
     _priceController.dispose();
     _quantityController.dispose();
+    _productDiscountController.dispose();
     _discountController.dispose();
     _customerNameController.dispose();
     _customerWhatsAppController.dispose();
@@ -2253,10 +2329,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  Container(
+                                  const SizedBox(
                                     width: 60,
-                                    alignment: Alignment.center,
-                                    child: const Text(
+                                    child: Text(
                                       'Rate',
                                       style: TextStyle(
                                         color: Colors.grey,
@@ -2266,10 +2341,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  Container(
+                                  const SizedBox(
                                     width: 45,
-                                    alignment: Alignment.center,
-                                    child: const Text(
+                                    child: Text(
                                       'Qty',
                                       style: TextStyle(
                                         color: Colors.grey,
@@ -2279,11 +2353,22 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  Container(
+                                  const SizedBox(
+                                    width: 50,
+                                    child: Text(
+                                      'Disc. %',
+                                      style: TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const SizedBox(
                                     width: 65,
-                                    alignment: Alignment.centerRight,
-                                    child: const Text(
-                                      'Amount',
+                                    child: Text(
+                                      'Total',
                                       style: TextStyle(
                                         color: Colors.grey,
                                         fontSize: 9,
@@ -2519,11 +2604,27 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
 
             const SizedBox(width: 8),
 
-            // Line total
+            // Discount (%)
+            SizedBox(
+              width: 50,
+              child: Text(
+                '${(item['discount'] ?? 0).toStringAsFixed(1)}%',
+                style: const TextStyle(
+                  color: Colors.redAccent,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+
+            const SizedBox(width: 8),
+
+            // Line total (after percentage discount)
             SizedBox(
               width: 65,
               child: Text(
-                'Rs. ${(item['price'] * item['quantity']).toStringAsFixed(2)}',
+                'Rs. ${((item['price'] * item['quantity']) * (1 - ((item['discount'] ?? 0) / 100))).toStringAsFixed(2)}',
                 style: const TextStyle(
                   color: Color(0xFF6B8E7F),
                   fontSize: 11,

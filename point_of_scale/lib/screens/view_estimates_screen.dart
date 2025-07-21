@@ -857,7 +857,13 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
   void _showConvertToOrderDialog(Map<String, dynamic> estimate) async {
     String selectedPaymentMode = 'Cash';
     String selectedSaleBy = estimate['sale_by'] ?? 'Rajesh Goyal';
-
+    final List<String> paymentModeOptions = [
+      'Cash',
+      'UPI: Ragini Bandl',
+      'UPI: Rajesh Goyal',
+      'Card',
+      'Other',
+    ];
     final List<String> saleByOptions = [
       'Rajesh Goyal',
       'Rupendra',
@@ -932,51 +938,38 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Column(
-                      children: [
-                        RadioListTile<String>(
-                          title: const Text(
-                            'Cash',
-                            style: TextStyle(color: Colors.white),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0D0D0D),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF2A2A2A)),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: selectedPaymentMode,
+                          dropdownColor: const Color(0xFF0D0D0D),
+                          style: const TextStyle(color: Colors.white),
+                          icon: const Icon(
+                            Icons.arrow_drop_down,
+                            color: Colors.grey,
                           ),
-                          value: 'Cash',
-                          groupValue: selectedPaymentMode,
-                          onChanged: (value) {
+                          onChanged: (String? newValue) {
                             setDialogState(() {
-                              selectedPaymentMode = value!;
+                              selectedPaymentMode = newValue!;
                             });
                           },
-                          activeColor: const Color(0xFF6B8E7F),
+                          items:
+                              paymentModeOptions.map<DropdownMenuItem<String>>((
+                                String value,
+                              ) {
+                                return DropdownMenuItem<String>(
+                                  value: value,
+                                  child: Text(value),
+                                );
+                              }).toList(),
                         ),
-                        RadioListTile<String>(
-                          title: const Text(
-                            'UPI: Ragini Bandl',
-                            style: TextStyle(color: Colors.white),
-                          ),
-                          value: 'UPI: Ragini Bandl',
-                          groupValue: selectedPaymentMode,
-                          onChanged: (value) {
-                            setDialogState(() {
-                              selectedPaymentMode = value!;
-                            });
-                          },
-                          activeColor: const Color(0xFF6B8E7F),
-                        ),
-                        RadioListTile<String>(
-                          title: const Text(
-                            'UPI: Rajesh Goyal',
-                            style: TextStyle(color: Colors.white),
-                          ),
-                          value: 'UPI: Rajesh Goyal',
-                          groupValue: selectedPaymentMode,
-                          onChanged: (value) {
-                            setDialogState(() {
-                              selectedPaymentMode = value!;
-                            });
-                          },
-                          activeColor: const Color(0xFF6B8E7F),
-                        ),
-                      ],
+                      ),
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton.icon(

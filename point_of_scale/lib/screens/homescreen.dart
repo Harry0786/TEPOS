@@ -722,7 +722,20 @@ class _HomeScreenState extends State<HomeScreen>
               ],
             ),
           ),
-          // Removed empty Row for better alignment
+          // Connection status dot
+          Container(
+            margin: const EdgeInsets.only(left: 8, right: 4),
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color:
+                  _isConnected
+                      ? const Color(0xFF4CAF50)
+                      : const Color(0xFFFF5252),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.black26, width: 1),
+            ),
+          ),
         ],
       ),
     );
@@ -769,16 +782,16 @@ class _HomeScreenState extends State<HomeScreen>
           // Large Total Sales Card
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 24),
             decoration: BoxDecoration(
               color: const Color(0xFF0D0D0D),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(color: const Color(0xFF3A3A3A)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
                 ),
               ],
             ),
@@ -786,13 +799,9 @@ class _HomeScreenState extends State<HomeScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Icon(
-                      Icons.attach_money,
-                      color: Color(0xFF6B8E7F),
-                      size: 32,
-                    ),
-                    const SizedBox(width: 12),
                     const Text(
                       'Total Sales',
                       style: TextStyle(
@@ -801,18 +810,22 @@ class _HomeScreenState extends State<HomeScreen>
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    Text(
+                      'Rs. ${_totalSales.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        color: Color(0xFFB9F6CA), // lighter green
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 10),
-                Text(
-                  'Rs. ${_totalSales.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                    color: Color(0xFF6B8E7F),
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                  ),
+                const Divider(
+                  color: Color(0xFF232526),
+                  thickness: 1,
+                  height: 16,
                 ),
-                const SizedBox(height: 18),
                 // Payment Breakdown Inline
                 Builder(
                   builder: (context) {
@@ -825,22 +838,14 @@ class _HomeScreenState extends State<HomeScreen>
                       return const Center(
                         child: Text(
                           'No payment data available',
-                          style: TextStyle(color: Colors.grey, fontSize: 14),
+                          style: TextStyle(color: Colors.grey, fontSize: 12),
                         ),
                       );
                     }
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Payment Breakdown',
-                          style: TextStyle(
-                            color: Color(0xFFB0B0B0),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
+                        // Removed 'Payment Breakdown' label and spacing
                         ...paymentBreakdown.entries
                             .where(
                               (entry) => (entry.value['amount'] as double) > 0,
@@ -850,32 +855,28 @@ class _HomeScreenState extends State<HomeScreen>
                               final data = entry.value;
                               final amount = data['amount'] as double;
                               return Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.only(bottom: 2),
                                 child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Container(
-                                      width: 4,
-                                      height: 20,
-                                      decoration: BoxDecoration(
-                                        color: _getPaymentModeColor(mode),
-                                        borderRadius: BorderRadius.circular(2),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
+                                    // Payment breakdown (smallest)
                                     Text(
-                                      _getPaymentModeDisplayName(mode),
+                                      mode,
                                       style: const TextStyle(
                                         color: Colors.white,
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
                                       ),
                                     ),
-                                    const Spacer(),
+                                    // Payment breakdown amount (lighter color)
                                     Text(
                                       'Rs. ${amount.toStringAsFixed(0)}',
                                       style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
+                                        color: Color(
+                                          0xFFB9F6CA,
+                                        ), // lighter green
+                                        fontSize: 13,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
@@ -1601,69 +1602,80 @@ class _HomeScreenState extends State<HomeScreen>
                   bottom: BorderSide(color: Color(0xFF3A3A3A), width: 0.5),
                 ),
       ),
-      child: Row(
-        children: [
-          // Type + Number
-          Expanded(
-            flex: 3,
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: typeColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    typeLabel,
-                    style: TextStyle(
-                      color: typeColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Flexible(
+              flex: 3,
+              fit: FlexFit.tight,
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: typeColor.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      typeLabel,
+                      style: TextStyle(
+                        color: typeColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    number,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
+                  const SizedBox(width: 8),
+                  Flexible(
+                    fit: FlexFit.tight,
+                    child: Text(
+                      number,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
-            ),
-          ),
-          // Amount
-          Expanded(
-            flex: 2,
-            child: Text(
-              'Rs. ${amount.toStringAsFixed(2)}',
-              style: const TextStyle(
-                color: Color(0xFF6B8E7F),
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
+                ],
               ),
-              textAlign: TextAlign.right,
             ),
-          ),
-          // Time only
-          Expanded(
-            flex: 2,
-            child: Text(
-              formattedTime,
-              style: TextStyle(color: Colors.grey[400], fontSize: 13),
-              textAlign: TextAlign.right,
+            Flexible(
+              flex: 2,
+              fit: FlexFit.tight,
+              child: Text(
+                'Rs. ${amount.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  color: Color(0xFF6B8E7F),
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.right,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-        ],
+            Flexible(
+              flex: 2,
+              fit: FlexFit.tight,
+              child: Text(
+                formattedTime,
+                style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                textAlign: TextAlign.right,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

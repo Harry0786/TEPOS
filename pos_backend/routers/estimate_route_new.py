@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field
 from models.estimate import EstimateCreate, EstimateResponse
 from database.database import get_database
 from typing import List, Optional, Any, Dict
@@ -8,6 +9,10 @@ import uuid
 import asyncio
 from services.websocket_service import websocket_manager
 from dateutil import tz
+
+class ConversionRequest(BaseModel):
+    payment_mode: str = Field("Cash", description="The payment mode for the order")
+    sale_by: Optional[str] = Field(None, description="The person who made the sale")
 
 router = APIRouter(
     prefix="/estimates",
@@ -308,7 +313,7 @@ async def delete_estimate(estimate_id: str) -> Dict[str, Any]:
         )
 
 @router.post("/{estimate_id}/convert-to-order")
-async def convert_estimate_to_order(estimate_id: str, payment_mode: str = "Cash", sale_by: Optional[str] = None) -> Dict[str, Any]:
+async def convert_estimate_to_order(estimate_id: str, request: ConversionRequest) -> Dict[str, Any]:
     """Convert an estimate to an order"""
     try:
         db = get_database()
@@ -329,14 +334,14 @@ async def convert_estimate_to_order(estimate_id: str, payment_mode: str = "Cash"
             "customer_name": estimate["customer_name"],
             "customer_phone": estimate["customer_phone"],
             "customer_address": estimate["customer_address"],
-            "sale_by": sale_by if sale_by is not None else estimate["sale_by"],
+            "sale_by": request.sale_by if request.sale_by is not None else estimate["sale_by"],
             "items": estimate["items"],
             "subtotal": estimate["subtotal"],
             "discount_amount": estimate["discount_amount"],
             "is_percentage_discount": estimate["is_percentage_discount"],
             "discount_percentage": estimate.get("discount_percentage"),
             "total": estimate["total"],
-            "payment_mode": payment_mode,
+            "payment_mode": request.payment_mode,
             "created_at": datetime.now(tz.gettz('Asia/Kolkata')),
             "source_estimate_id": estimate["estimate_id"],
             "source_estimate_number": estimate["estimate_number"]
@@ -377,7 +382,7 @@ async def convert_estimate_to_order(estimate_id: str, payment_mode: str = "Cash"
                     "estimate_number": estimate["estimate_number"],
                     "customer_name": order_data["customer_name"],
                     "total": order_data["total"],
-                    "payment_mode": payment_mode,
+                    "payment_mode": request.payment_mode,
                     "created_at": order_data["created_at"].isoformat()
                 },
                 "order_id": order_data["order_id"],
