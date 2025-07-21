@@ -67,9 +67,6 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   // Font size for order estimate (auto-calculated)
   double _estimateFontSize = 12.0;
 
-  // Add controller for amount paid
-  final TextEditingController _amountPaidController = TextEditingController();
-
   // Helper to calculate font size based on content and width
   void _updateEstimateFontSize(BoxConstraints constraints) {
     if (_cartItems.isEmpty) {
@@ -1271,7 +1268,6 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     _customerAddressController.clear();
     _selectedSaleBy = 'Rajesh Goyal'; // Reset to default
     _selectedPaymentMode = 'Cash'; // Reset to default
-    _amountPaidController.clear();
 
     showDialog(
       context: context,
@@ -1297,11 +1293,54 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                     _buildInputField('Customer Name', _customerNameController),
                     const SizedBox(height: 12),
                     _buildInputField(
-                      'Phone No',
+                      'WhatsApp Number',
                       _customerWhatsAppController,
                       isNumber: true,
                     ),
                     const SizedBox(height: 12),
+
+                    // Sale By Dropdown
+                    const Text(
+                      'Sale By:',
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0D0D0D),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF2A2A2A)),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedSaleBy,
+                          dropdownColor: const Color(0xFF0D0D0D),
+                          style: const TextStyle(color: Colors.white),
+                          icon: const Icon(
+                            Icons.arrow_drop_down,
+                            color: Colors.grey,
+                          ),
+                          onChanged: (String? newValue) {
+                            setDialogState(() {
+                              _selectedSaleBy = newValue!;
+                            });
+                          },
+                          items:
+                              _saleByOptions.map<DropdownMenuItem<String>>((
+                                String value,
+                              ) {
+                                return DropdownMenuItem<String>(
+                                  value: value,
+                                  child: Text(value),
+                                );
+                              }).toList(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
                     TextField(
                       controller: _customerAddressController,
                       maxLines: 3,
@@ -1309,49 +1348,6 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                       decoration: InputDecoration(
                         labelText: 'Address',
                         labelStyle: TextStyle(color: Colors.grey[400]),
-                        enabledBorder: OutlineInputBorder(
-                          borderSide: const BorderSide(
-                            color: Color(0xFF2A2A2A),
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderSide: const BorderSide(
-                            color: Color(0xFF6B8E7F),
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        filled: true,
-                        fillColor: const Color(0xFF0D0D0D),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Sale By:',
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: _selectedSaleBy,
-                      dropdownColor: const Color(0xFF1A1A1A),
-                      items:
-                          _saleByOptions
-                              .map(
-                                (name) => DropdownMenuItem(
-                                  value: name,
-                                  child: Text(
-                                    name,
-                                    style: const TextStyle(color: Colors.white),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                      onChanged: (value) {
-                        setDialogState(() {
-                          _selectedSaleBy = value!;
-                        });
-                      },
-                      decoration: InputDecoration(
                         enabledBorder: OutlineInputBorder(
                           borderSide: const BorderSide(
                             color: Color(0xFF2A2A2A),
@@ -1424,31 +1420,6 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    // Amount Paid field
-                    TextField(
-                      controller: _amountPaidController,
-                      keyboardType: TextInputType.number,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: 'Amount Paid',
-                        labelStyle: TextStyle(color: Colors.grey[400]),
-                        enabledBorder: OutlineInputBorder(
-                          borderSide: const BorderSide(
-                            color: Color(0xFF2A2A2A),
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderSide: const BorderSide(
-                            color: Color(0xFF6B8E7F),
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        filled: true,
-                        fillColor: const Color(0xFF0D0D0D),
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -1465,10 +1436,12 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                     backgroundColor: const Color(0xFF6B8E7F),
                   ),
                   onPressed: () {
-                    if (_customerNameController.text.isEmpty) {
+                    if (_customerNameController.text.isEmpty ||
+                        _customerWhatsAppController.text.isEmpty ||
+                        _customerAddressController.text.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Please fill customer name'),
+                          content: Text('Please fill all customer details'),
                           backgroundColor: Colors.red,
                         ),
                       );
@@ -1488,7 +1461,6 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   }
 
   void _showBillPreview(String paymentMode) {
-    double paid = double.tryParse(_amountPaidController.text) ?? _total;
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -1541,13 +1513,11 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                   ),
                   const SizedBox(height: 2),
                 ],
-                if (_customerAddressController.text.isNotEmpty) ...[
-                  Text(
-                    'Address: ${_customerAddressController.text}',
-                    style: TextStyle(color: Colors.grey[300], fontSize: 12),
-                  ),
-                  const SizedBox(height: 2),
-                ],
+                Text(
+                  'Address: ${_customerAddressController.text}',
+                  style: TextStyle(color: Colors.grey[300], fontSize: 12),
+                ),
+                const SizedBox(height: 2),
                 Text(
                   'Sale By: $_selectedSaleBy',
                   style: TextStyle(color: Colors.grey[300], fontSize: 12),
@@ -1569,29 +1539,6 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                       style: const TextStyle(
                         color: Color(0xFF6B8E7F),
                         fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                // Amount Paid
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Total Paid:',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      'Rs. ${paid.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        color: Color(0xFF6B8E7F),
-                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -1672,7 +1619,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      'Total:',
+                      'Total Paid:',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 14,
@@ -2262,7 +2209,6 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     _customerNameController.dispose();
     _customerWhatsAppController.dispose();
     _customerAddressController.dispose();
-    _amountPaidController.dispose();
     _performanceService.dispose();
     super.dispose();
   }
