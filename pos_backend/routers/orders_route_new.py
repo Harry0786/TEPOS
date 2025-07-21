@@ -74,6 +74,8 @@ async def create_completed_sale(order_data: OrderCreate) -> Dict[str, Any]:
         
         # Convert to dict and add timestamp
         order_dict = order_data.model_dump()
+        if 'amount_paid' not in order_dict:
+            order_dict['amount_paid'] = order_dict.get('total', 0.0)
         
         # Set created_at to current IST time always as a timezone-aware datetime
         ist = tz.gettz('Asia/Kolkata')
@@ -220,6 +222,7 @@ async def get_all_orders() -> List[Dict[str, Any]]:
                 "is_percentage_discount": order.get("is_percentage_discount", False),
                 "discount_percentage": order.get("discount_percentage", 0.0),
                 "payment_mode": order.get("payment_mode", "Cash"),
+                "amount_paid": order.get("amount_paid", order.get("total", 0.0)),
                 "type": "order"
             }
             all_orders.append(order_data)

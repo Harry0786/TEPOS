@@ -709,51 +709,8 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                         ),
                   );
 
-                  if (shouldDelete == true) {
-                    showDialog(
-                      context: context,
-                      barrierDismissible: false,
-                      builder:
-                          (context) => const AlertDialog(
-                            backgroundColor: Color(0xFF1A1A1A),
-                            content: Row(
-                              children: [
-                                CircularProgressIndicator(color: Colors.red),
-                                SizedBox(width: 16),
-                                Text(
-                                  'Deleting estimate...',
-                                  style: TextStyle(color: Colors.white),
-                                ),
-                              ],
-                            ),
-                          ),
-                    );
-
-                    final result = await ApiService.deleteEstimate(
-                      estimateId: estimate['estimate_id'] ?? estimate['id'],
-                    );
-
-                    if (!mounted) return;
-                    Navigator.of(context).pop(); // Close loading dialog
-
-                    if (result['success'] == true) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Estimate deleted successfully!'),
-                          backgroundColor: Color(0xFF6B8E7F),
-                        ),
-                      );
-                      _fetchEstimates();
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Failed to delete: ${result['message'] ?? 'Unknown error'}',
-                          ),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
+                  if (shouldDelete == true && mounted) {
+                    await _deleteEstimateSafely(estimate);
                   }
                 },
                 icon: const Icon(Icons.delete, size: 18),
@@ -870,6 +827,9 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
       'Deepak',
       'Major',
     ];
+    final TextEditingController amountPaidController = TextEditingController(
+      text: (estimate['total'] ?? '').toString(),
+    );
 
     showDialog(
       context: context,
@@ -885,290 +845,386 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text(
+                      'Customer: ${estimate['customer_name'] ?? ''}',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Payment Mode:',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: selectedPaymentMode,
+                      dropdownColor: const Color(0xFF1A1A1A),
+                      items:
+                          paymentModeOptions
+                              .map(
+                                (mode) => DropdownMenuItem(
+                                  value: mode,
+                                  child: Text(
+                                    mode,
+                                    style: const TextStyle(color: Colors.white),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          selectedPaymentMode = value!;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        enabledBorder: OutlineInputBorder(
+                          borderSide: const BorderSide(
+                            color: Color(0xFF2A2A2A),
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: const BorderSide(
+                            color: Color(0xFF6B8E7F),
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFF0D0D0D),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     const Text(
                       'Sale By:',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: TextStyle(color: Colors.grey),
                     ),
                     const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0D0D0D),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF2A2A2A)),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: selectedSaleBy,
-                          dropdownColor: const Color(0xFF0D0D0D),
-                          style: const TextStyle(color: Colors.white),
-                          icon: const Icon(
-                            Icons.arrow_drop_down,
-                            color: Colors.grey,
-                          ),
-                          onChanged: (String? newValue) {
-                            setDialogState(() {
-                              selectedSaleBy = newValue!;
-                            });
-                          },
-                          items:
-                              saleByOptions.map<DropdownMenuItem<String>>((
-                                String value,
-                              ) {
-                                return DropdownMenuItem<String>(
-                                  value: value,
-                                  child: Text(value),
-                                );
-                              }).toList(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Mode of Payment:',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0D0D0D),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF2A2A2A)),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: selectedPaymentMode,
-                          dropdownColor: const Color(0xFF0D0D0D),
-                          style: const TextStyle(color: Colors.white),
-                          icon: const Icon(
-                            Icons.arrow_drop_down,
-                            color: Colors.grey,
-                          ),
-                          onChanged: (String? newValue) {
-                            setDialogState(() {
-                              selectedPaymentMode = newValue!;
-                            });
-                          },
-                          items:
-                              paymentModeOptions.map<DropdownMenuItem<String>>((
-                                String value,
-                              ) {
-                                return DropdownMenuItem<String>(
-                                  value: value,
-                                  child: Text(value),
-                                );
-                              }).toList(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6B8E7F),
-                      ),
-                      onPressed: () async {
-                        Navigator.of(context).pop(); // Close dialog
-
-                        // Show loading dialog with better error handling
-                        if (_isConversionDialogShown) {
-                          print('⚠️ Conversion dialog already shown, skipping');
-                          return;
-                        }
-
-                        try {
-                          setState(() {
-                            _isConversionDialogShown = true;
-                          });
-
-                          showDialog(
-                            context: context,
-                            barrierDismissible: false,
-                            builder:
-                                (context) => const AlertDialog(
-                                  backgroundColor: Color(0xFF1A1A1A),
-                                  content: Row(
-                                    children: [
-                                      CircularProgressIndicator(
-                                        color: Color(0xFF6B8E7F),
-                                      ),
-                                      SizedBox(width: 16),
-                                      Text(
-                                        'Converting to order...',
-                                        style: TextStyle(color: Colors.white),
-                                      ),
-                                    ],
+                    DropdownButtonFormField<String>(
+                      value: selectedSaleBy,
+                      dropdownColor: const Color(0xFF1A1A1A),
+                      items:
+                          saleByOptions
+                              .map(
+                                (name) => DropdownMenuItem(
+                                  value: name,
+                                  child: Text(
+                                    name,
+                                    style: const TextStyle(color: Colors.white),
                                   ),
                                 ),
-                          );
-                          print('✅ Loading dialog shown successfully');
-
-                          // Set a safety timeout to close dialog if something goes wrong
-                          _conversionTimeoutTimer?.cancel();
-                          _conversionTimeoutTimer = Timer(
-                            const Duration(seconds: 30),
-                            () {
-                              print(
-                                '🕐 Safety timeout triggered - force closing dialog',
-                              );
-                              _forceCloseConversionDialog();
-                            },
-                          );
-                        } catch (dialogError) {
-                          print(
-                            '⚠️ Error showing loading dialog: $dialogError',
-                          );
-                          setState(() {
-                            _isConversionDialogShown = false;
-                          });
-                        }
-
-                        try {
-                          print('🔄 Starting estimate to order conversion...');
-                          print('📋 Estimate data: ${estimate.toString()}');
-                          print('👤 Sale By: $selectedSaleBy');
-                          print('💳 Payment Mode: $selectedPaymentMode');
-
-                          // Use the proper convertEstimateToOrder function
-                          final result = await ApiService.convertEstimateToOrder(
-                            estimateId:
-                                estimate['estimate_id'] ?? estimate['id'],
-                            paymentMode: selectedPaymentMode,
-                            saleBy: selectedSaleBy,
-                          ).timeout(
-                            const Duration(
-                              seconds: 25,
-                            ), // Increased timeout for conversion
-                            onTimeout: () {
-                              throw Exception(
-                                'Request timeout - please check your connection',
-                              );
-                            },
-                          );
-
-                          print(
-                            '✅ API call completed. Result: ${result.toString()}',
-                          );
-
-                          // Check if widget is still mounted before proceeding
-                          if (!mounted) {
-                            print(
-                              '⚠️ Widget no longer mounted, stopping operation',
-                            );
-                            return;
-                          }
-
-                          // Safely close loading dialog
-                          _closeConversionDialog();
-
-                          if (result['success'] == true) {
-                            print('🎉 Order created successfully!');
-                            // Safely show success message
-                            try {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Estimate converted to order!',
-                                    ),
-                                    backgroundColor: Color(0xFF6B8E7F),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              }
-                            } catch (snackbarError) {
-                              print(
-                                '⚠️ Error showing success message: $snackbarError',
-                              );
-                            }
-
-                            // The backend conversion endpoint handles estimate linking automatically
-                            // No need to manually delete or refresh - WebSocket will handle updates
-                            print(
-                              '✅ Estimate conversion completed successfully',
-                            );
-                          } else {
-                            print(
-                              '❌ Order creation failed: ${result['message']}',
-                            );
-                            // Safely show error message
-                            try {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Failed to convert: ${result['message'] ?? 'Unknown error'}',
-                                    ),
-                                    backgroundColor: Colors.red,
-                                    duration: Duration(seconds: 3),
-                                  ),
-                                );
-                              }
-                            } catch (snackbarError) {
-                              print(
-                                '⚠️ Error showing error message: $snackbarError',
-                              );
-                            }
-                          }
-                        } catch (e) {
-                          print('Error converting estimate to order: $e');
-                          print('🔍 Error details: ${e.toString()}');
-                          // Safely handle errors
-                          if (!mounted) {
-                            print(
-                              '⚠️ Widget no longer mounted during error handling',
-                            );
-                            return;
-                          }
-
-                          // Safely close loading dialog after error
-                          _closeConversionDialog();
-
-                          // Safely show error message
-                          try {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Error: ${e.toString()}'),
-                                  backgroundColor: Colors.red,
-                                  duration: Duration(seconds: 4),
-                                ),
-                              );
-                            }
-                          } catch (snackbarError) {
-                            print(
-                              '⚠️ Error showing error snackbar: $snackbarError',
-                            );
-                          }
-                        }
+                              )
+                              .toList(),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          selectedSaleBy = value!;
+                        });
                       },
-                      icon: const Icon(Icons.swap_horiz, size: 18),
-                      label: const Text('Convert to Order'),
+                      decoration: InputDecoration(
+                        enabledBorder: OutlineInputBorder(
+                          borderSide: const BorderSide(
+                            color: Color(0xFF2A2A2A),
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: const BorderSide(
+                            color: Color(0xFF6B8E7F),
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFF0D0D0D),
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(color: Colors.grey),
+                    const SizedBox(height: 12),
+                    // Amount Paid field
+                    TextField(
+                      controller: amountPaidController,
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        labelText: 'Amount Paid',
+                        labelStyle: TextStyle(color: Colors.grey[400]),
+                        enabledBorder: OutlineInputBorder(
+                          borderSide: const BorderSide(
+                            color: Color(0xFF2A2A2A),
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: const BorderSide(
+                            color: Color(0xFF6B8E7F),
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFF0D0D0D),
                       ),
                     ),
                   ],
                 ),
               ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6B8E7F),
+                  ),
+                  onPressed: () async {
+                    Navigator.of(context).pop(); // Close dialog
+
+                    // Show loading dialog with better error handling
+                    if (_isConversionDialogShown) {
+                      print('⚠️ Conversion dialog already shown, skipping');
+                      return;
+                    }
+
+                    try {
+                      setState(() {
+                        _isConversionDialogShown = true;
+                      });
+
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder:
+                            (context) => const AlertDialog(
+                              backgroundColor: Color(0xFF1A1A1A),
+                              content: Row(
+                                children: [
+                                  CircularProgressIndicator(
+                                    color: Color(0xFF6B8E7F),
+                                  ),
+                                  SizedBox(width: 16),
+                                  Text(
+                                    'Converting to order...',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                ],
+                              ),
+                            ),
+                      );
+                      print('✅ Loading dialog shown successfully');
+
+                      // Set a safety timeout to close dialog if something goes wrong
+                      _conversionTimeoutTimer?.cancel();
+                      _conversionTimeoutTimer = Timer(
+                        const Duration(seconds: 30),
+                        () {
+                          print(
+                            '🕐 Safety timeout triggered - force closing dialog',
+                          );
+                          _forceCloseConversionDialog();
+                        },
+                      );
+                    } catch (dialogError) {
+                      print('⚠️ Error showing loading dialog: $dialogError');
+                      setState(() {
+                        _isConversionDialogShown = false;
+                      });
+                    }
+
+                    try {
+                      print('🔄 Starting estimate to order conversion...');
+                      print('📋 Estimate data: ${estimate.toString()}');
+                      print('👤 Sale By: $selectedSaleBy');
+                      print('💳 Payment Mode: $selectedPaymentMode');
+                      double paid =
+                          double.tryParse(amountPaidController.text) ??
+                          (estimate['total'] ?? 0.0);
+
+                      // Use the proper convertEstimateToOrder function
+                      final result = await ApiService.convertEstimateToOrder(
+                        estimateId: estimate['estimate_id'] ?? estimate['id'],
+                        paymentMode: selectedPaymentMode,
+                        saleBy: selectedSaleBy,
+                      ).timeout(
+                        const Duration(
+                          seconds: 25,
+                        ), // Increased timeout for conversion
+                        onTimeout: () {
+                          throw Exception(
+                            'Request timeout - please check your connection',
+                          );
+                        },
+                      );
+
+                      print(
+                        '✅ API call completed. Result: ${result.toString()}',
+                      );
+
+                      // Check if widget is still mounted before proceeding
+                      if (!mounted) {
+                        print(
+                          '⚠️ Widget no longer mounted, stopping operation',
+                        );
+                        return;
+                      }
+
+                      // Safely close loading dialog
+                      _closeConversionDialog();
+
+                      if (result['success'] == true) {
+                        print('🎉 Order created successfully!');
+                        // Safely show success message
+                        try {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Estimate converted to order!'),
+                                backgroundColor: Color(0xFF6B8E7F),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        } catch (snackbarError) {
+                          print(
+                            '⚠️ Error showing success message: $snackbarError',
+                          );
+                        }
+
+                        // The backend conversion endpoint handles estimate linking automatically
+                        // No need to manually delete or refresh - WebSocket will handle updates
+                        print('✅ Estimate conversion completed successfully');
+                      } else {
+                        print('❌ Order creation failed: ${result['message']}');
+                        // Safely show error message
+                        try {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Failed to convert: ${result['message'] ?? 'Unknown error'}',
+                                ),
+                                backgroundColor: Colors.red,
+                                duration: Duration(seconds: 3),
+                              ),
+                            );
+                          }
+                        } catch (snackbarError) {
+                          print(
+                            '⚠️ Error showing error message: $snackbarError',
+                          );
+                        }
+                      }
+                    } catch (e) {
+                      print('Error converting estimate to order: $e');
+                      print('🔍 Error details: ${e.toString()}');
+                      // Safely handle errors
+                      if (!mounted) {
+                        print(
+                          '⚠️ Widget no longer mounted during error handling',
+                        );
+                        return;
+                      }
+
+                      // Safely close loading dialog after error
+                      _closeConversionDialog();
+
+                      // Safely show error message
+                      try {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error: ${e.toString()}'),
+                              backgroundColor: Colors.red,
+                              duration: Duration(seconds: 4),
+                            ),
+                          );
+                        }
+                      } catch (snackbarError) {
+                        print(
+                          '⚠️ Error showing error snackbar: $snackbarError',
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.swap_horiz, size: 18),
+                  label: const Text('Convert to Order'),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+              ],
             );
           },
         );
       },
     );
+  }
+
+  Future<void> _deleteEstimateSafely(Map<String, dynamic> estimate) async {
+    final loadingDialog = showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => const AlertDialog(
+            backgroundColor: Color(0xFF1A1A1A),
+            content: Row(
+              children: [
+                CircularProgressIndicator(color: Colors.red),
+                SizedBox(width: 16),
+                Text(
+                  'Deleting estimate...',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+    );
+
+    try {
+      final result = await ApiService.deleteEstimate(
+        estimateId: estimate['estimate_id'] ?? estimate['id'],
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Request timeout for estimate deletion.');
+        },
+      );
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Close loading dialog
+
+      if (result['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Estimate deleted successfully!'),
+            backgroundColor: Color(0xFF6B8E7F),
+          ),
+        );
+        _fetchEstimates();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to delete: ${result['message'] ?? 'Unknown error'}',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Close loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting estimate: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }

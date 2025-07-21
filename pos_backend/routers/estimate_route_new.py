@@ -13,6 +13,7 @@ from dateutil import tz
 class ConversionRequest(BaseModel):
     payment_mode: str = Field("Cash", description="The payment mode for the order")
     sale_by: Optional[str] = Field(None, description="The person who made the sale")
+    amount_paid: Optional[float] = Field(None, description="The amount paid by the customer (can be less than total)")
 
 router = APIRouter(
     prefix="/estimates",
@@ -344,7 +345,8 @@ async def convert_estimate_to_order(estimate_id: str, request: ConversionRequest
             "payment_mode": request.payment_mode,
             "created_at": datetime.now(tz.gettz('Asia/Kolkata')),
             "source_estimate_id": estimate["estimate_id"],
-            "source_estimate_number": estimate["estimate_number"]
+            "source_estimate_number": estimate["estimate_number"],
+            "amount_paid": request.amount_paid if request.amount_paid is not None else estimate["total"]
         }
         print(f"[DEBUG] Order (from estimate) created_at (IST): {order_data['created_at']}")
         order_data["order_id"] = f"ORDER-{uuid.uuid4().hex[:8].upper()}"
@@ -383,7 +385,8 @@ async def convert_estimate_to_order(estimate_id: str, request: ConversionRequest
                     "customer_name": order_data["customer_name"],
                     "total": order_data["total"],
                     "payment_mode": request.payment_mode,
-                    "created_at": order_data["created_at"].isoformat()
+                    "created_at": order_data["created_at"].isoformat(),
+                    "amount_paid": order_data["amount_paid"]
                 },
                 "order_id": order_data["order_id"],
                 "sale_number": order_data["sale_number"]
