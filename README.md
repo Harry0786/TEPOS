@@ -1,311 +1,271 @@
-# TEPOS - Tirupati Electricals Point of Sale System
+# TEPOS - Modern Point of Sale System
 
-A modern, feature-rich Flutter-based Point of Sale (POS) application designed specifically for Tirupati Electricals. The system includes a robust FastAPI backend with real-time WebSocket communication, comprehensive reporting, and seamless customer communication.
+<div align="center">
+  <img src="point_of_scale/assets/icon/TEPOS Logo.png" alt="TEPOS Logo" width="200"/>
+  
+  [![Flutter](https://img.shields.io/badge/Flutter-3.7.2+-blue.svg)](https://flutter.dev/)
+  [![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1+-green.svg)](https://fastapi.tiangolo.com/)
+  [![MongoDB](https://img.shields.io/badge/MongoDB-4.5.0+-orange.svg)](https://www.mongodb.com/)
+  [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+</div>
 
-![TEPOS Logo](assets/icon/TEPOS%20Logo.png)
+A comprehensive **Point of Sale (POS) system** built with **Flutter** for the frontend and **FastAPI** for the backend, designed specifically for **Tirupati Electricals**. This modern, cross-platform solution provides seamless sales management, estimate generation, and customer communication.
 
 ## 🚀 Features
 
-### Core POS Features
-- **Product Management**: Add, edit, and manage products in cart with real-time calculations
-- **Estimate Generation**: Create professional estimates with automatic PDF generation
-- **Order Management**: Complete order lifecycle from creation to completion
-- **Customer Management**: Store and manage customer details for estimates and orders
-- **Staff Tracking**: Track sales by different staff members
-- **Sequential Numbering**: Automatic sequential numbering for estimates (#001, #002, etc.)
-
-### Communication & Sharing
-- **WhatsApp Integration**: Send estimates directly to customers via WhatsApp
-- **SMS Service**: Send notifications and updates via SMS
-- **PDF Generation**: Professional PDF estimates with company branding
-- **Multi-platform Sharing**: Share PDFs via email, messaging apps, or cloud storage
-
-### Payment & Financial
-- **Multiple Payment Modes**: Cash, Card, UPI, Online, Bank Transfer, Cheque
-- **Payment Breakdown**: Detailed payment mode analysis with amounts and counts
+### 💼 Core POS Features
+- **Product Management**: Add, edit, and manage products in cart
+- **Sales Tracking**: Track sales by different staff members
 - **Discount Management**: Apply percentage or fixed amount discounts
-- **Financial Reporting**: Comprehensive sales and payment reports
+- **Customer Management**: Store and manage customer details
+- **Sequential Numbering**: Automatic estimate numbering (#001, #002, etc.)
 
-### Real-time Features
-- **WebSocket Communication**: Real-time updates across all connected devices
-- **Live Data Sync**: Automatic synchronization of estimates, orders, and sales
-- **Auto-refresh**: Smart data refresh with optimized backend load
-- **Connection Health Monitoring**: Robust connection management with automatic reconnection
+### 📄 Estimate & Billing
+- **Professional Estimates**: Create detailed estimates with PDF export
+- **Bill Generation**: Generate and send bills to customers
+- **PDF Generation**: High-quality PDFs with company branding
+- **Multiple Formats**: Support for estimates and invoices
 
-### Performance & Stability
-- **Optimized Performance**: Reduced frame drops and improved responsiveness
-- **Memory Management**: Proper resource cleanup and memory leak prevention
-- **Error Handling**: Comprehensive error handling with graceful recovery
-- **Timeout Protection**: Request timeouts to prevent hanging operations
+### 📱 Communication Integration
+- **WhatsApp Integration**: Send estimates directly to customer WhatsApp
+- **SMS Service**: Automated SMS notifications
+- **Real-time Sync**: WebSocket-based real-time updates
+- **File Sharing**: Share PDFs via any app or email
+
+### 🔧 Technical Features
+- **Cross-platform**: Works on Android, iOS, Windows, macOS, and Linux
+- **Real-time Updates**: WebSocket integration for live data sync
+- **Performance Optimized**: Optimized for smooth operation
+- **Responsive Design**: Beautiful UI that adapts to different screen sizes
 
 ## 🏗️ Architecture
 
+```
+TEPOS POS System
+├── 📱 Flutter Frontend (point_of_scale/)
+│   ├── 🎨 UI Components
+│   ├── 🔌 API Services
+│   ├── 📄 PDF Generation
+│   └── 📱 Platform-specific code
+└── 🖥️ FastAPI Backend (pos_backend/)
+    ├── 🗄️ MongoDB Database
+    ├── 🔌 RESTful APIs
+    ├── 📡 WebSocket Services
+    └── 📧 Communication Services
+```
+
+## 🛠️ Tech Stack
+
 ### Frontend (Flutter)
-```
-lib/
-├── main.dart                 # App entry point with error handling
-├── screens/                  # UI screens
-│   ├── homescreen.dart       # Main dashboard with analytics
-│   ├── new_sale_screen.dart  # Sales and estimate creation
-│   ├── view_orders_screen.dart # Order management
-│   ├── view_estimates_screen.dart # Estimate management
-│   ├── reports_screen.dart   # Financial reporting
-│   ├── settings_screen.dart  # App configuration
-│   └── splash_screen.dart    # App loading screen
-├── services/                 # Business logic and API services
-│   ├── api_service.dart      # REST API communication
-│   ├── websocket_service.dart # Real-time WebSocket handling
-│   ├── pdf_service.dart      # PDF generation
-│   ├── whatsapp_service.dart # WhatsApp integration
-│   ├── sms_service.dart      # SMS functionality
-│   ├── performance_service.dart # Performance monitoring
-│   └── auto_refresh_service.dart # Smart data refresh
-└── widgets/                  # Reusable UI components
-```
+- **Framework**: Flutter 3.7.2+
+- **Language**: Dart
+- **Key Packages**:
+  - `pdf`: PDF generation
+  - `path_provider`: File system access
+  - `share_plus`: File sharing
+  - `url_launcher`: WhatsApp integration
+  - `http`: API communication
+  - `web_socket_channel`: Real-time updates
+  - `printing`: Advanced PDF printing
 
-### Backend (FastAPI + MongoDB)
-```
-pos_backend/
-├── main.py                   # FastAPI application entry point
-├── config.py                 # Configuration management
-├── routers/                  # API route handlers
-│   ├── estimate_route_new.py # Estimate CRUD operations
-│   ├── orders_route_new.py   # Order CRUD operations
-│   ├── reports_route.py      # Financial reporting APIs
-│   └── sms_route.py          # SMS service endpoints
-├── models/                   # Data models
-│   ├── estimate.py           # Estimate data model
-│   └── order.py              # Order data model
-├── services/                 # Backend services
-│   ├── websocket_service.py  # WebSocket management
-│   └── sms_service.py        # SMS service implementation
-└── database/                 # Database configuration
-```
+### Backend (FastAPI)
+- **Framework**: FastAPI 0.104.1+
+- **Language**: Python 3.8+
+- **Database**: MongoDB with Motor (async driver)
+- **Key Libraries**:
+  - `uvicorn`: ASGI server
+  - `motor`: Async MongoDB driver
+  - `websockets`: WebSocket support
+  - `python-multipart`: File uploads
 
-## 📱 Screenshots & Features
-
-### Dashboard
-- Real-time sales analytics
-- Payment breakdown by mode
-- Recent orders and estimates
-- Staff performance tracking
-
-### Sales & Estimates
-- Intuitive product selection
-- Real-time price calculations
-- Professional PDF generation
-- WhatsApp integration
-
-### Order Management
-- Complete order lifecycle
-- Status tracking
-- Payment mode management
-- Order history
-
-### Reporting
-- Daily, weekly, monthly reports
-- Payment mode analysis
-- Staff performance metrics
-- Financial summaries
-
-## 🛠️ Setup Instructions
+## 📦 Installation & Setup
 
 ### Prerequisites
-- Flutter SDK (^3.7.2)
-- Python 3.8+
-- MongoDB
-- Android Studio / VS Code
+- **Flutter SDK** (3.7.2 or higher)
+- **Python** (3.8 or higher)
+- **MongoDB** (local or cloud instance)
+- **Git**
 
-### Frontend Setup
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd point_of_scale
-   ```
-
-2. **Install dependencies**
-   ```bash
-   flutter pub get
-   ```
-
-3. **Configure API endpoints**
-   - Update `lib/services/api_service.dart` with your backend URL
-   - Ensure WebSocket URL is correctly configured
-
-4. **Run the application**
-   ```bash
-   flutter run
-   ```
-
-### Backend Setup
-1. **Navigate to backend directory**
-   ```bash
-   cd pos_backend
-   ```
-
-2. **Create virtual environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Configure environment**
-   - Set up MongoDB connection
-   - Configure SMS service credentials
-   - Set environment variables
-
-5. **Run the server**
-   ```bash
-   uvicorn main:app --host 0.0.0.0 --port 8000
-   ```
-
-## 📦 Dependencies
-
-### Frontend Dependencies
-```yaml
-dependencies:
-  flutter: sdk: flutter
-  cupertino_icons: ^1.0.8
-  http: ^1.1.0                    # API communication
-  pdf: ^3.11.3                    # PDF generation
-  flutter_pdfview: ^1.4.1+1       # PDF viewing
-  path_provider: ^2.1.5           # File system access
-  share_plus: ^11.0.0             # File sharing
-  intl: ^0.20.2                   # Date formatting
-  url_launcher: ^6.2.5            # WhatsApp integration
-  web_socket_channel: ^2.4.0      # Real-time communication
-  printing: ^5.12.0               # PDF printing
+### 1. Clone the Repository
+```bash
+git clone https://github.com/yourusername/tepos-pos.git
+cd tepos-pos
 ```
 
-### Backend Dependencies
+### 2. Backend Setup
+
+```bash
+# Navigate to backend directory
+cd pos_backend
+
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# Windows
+venv\Scripts\activate
+# macOS/Linux
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Create .env file
+echo "MONGODB_URL=mongodb://localhost:27017" > .env
+echo "DATABASE_NAME=pos_db" >> .env
+
+# Start the server
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
-fastapi==0.104.1          # Web framework
-uvicorn==0.24.0           # ASGI server
-motor==3.3.1              # MongoDB async driver
-pymongo==4.5.0            # MongoDB driver
-python-dotenv             # Environment management
-requests==2.31.0          # HTTP requests
-python-multipart==0.0.6   # File uploads
-websockets==12.0          # WebSocket support
-python-dateutil           # Date utilities
+
+### 3. Frontend Setup
+
+```bash
+# Navigate to Flutter app directory
+cd point_of_scale
+
+# Install Flutter dependencies
+flutter pub get
+
+# Run the application
+flutter run
 ```
 
-## 🔧 Configuration
+## 🎯 Quick Start
 
-### API Configuration
-The app supports multiple environments:
-- **Development**: Local development server
-- **Production**: Render deployment
-- **Custom**: Configurable endpoints
+### Creating an Estimate
+1. **Add Products**: Select products and add to cart
+2. **Apply Discounts**: Set percentage or fixed discounts
+3. **Customer Details**: Enter customer information
+4. **Generate Estimate**: Create professional PDF estimate
+5. **Send via WhatsApp**: Share directly with customer
 
-### WebSocket Configuration
-- Real-time data synchronization
-- Automatic reconnection
-- Connection health monitoring
-- Error handling and recovery
+### Backend API Access
+- **API Documentation**: http://localhost:8000/docs
+- **Interactive Docs**: http://localhost:8000/redoc
+- **Health Check**: http://localhost:8000/health
 
-### SMS Service
-- Twilio integration for SMS
-- WhatsApp Business API support
-- Custom SMS templates
+## 📱 Screenshots
 
-## 📊 Recent Improvements
+<div align="center">
+  <img src="screenshots/home.png" alt="Home Screen" width="200"/>
+  <img src="screenshots/sales.png" alt="Sales Screen" width="200"/>
+  <img src="screenshots/estimates.png" alt="Estimates Screen" width="200"/>
+</div>
 
-### Performance Optimizations
-- **Reduced Frame Drops**: From 131+ frames to minimal drops
-- **Memory Management**: Proper resource cleanup and disposal
-- **Async Operations**: Non-blocking main thread operations
-- **Caching**: Smart data caching with invalidation
+## 🔌 API Endpoints
 
-### Stability Enhancements
-- **Error Handling**: Comprehensive error handling throughout the app
-- **Timeout Protection**: Request timeouts to prevent hanging
-- **Connection Management**: Robust WebSocket connection handling
-- **Crash Prevention**: Safe state management and disposal
+### Estimates
+- `POST /api/estimates/create` - Create new estimate
+- `GET /api/estimates/` - Get all estimates
+- `GET /api/estimates/{estimate_id}` - Get specific estimate
+- `GET /api/estimates/number/{estimate_number}` - Get by estimate number
 
-### User Experience
-- **Loading States**: Proper loading indicators for all operations
-- **Error Messages**: Clear and informative error messages
-- **Responsive Design**: Optimized for various screen sizes
-- **Accessibility**: Improved accessibility features
+### Orders
+- `POST /api/orders/create` - Create new order
+- `GET /api/orders/` - Get all orders
+- `GET /api/orders/{order_id}` - Get specific order
+
+## 🗄️ Database Schema
+
+### Estimates Collection
+```json
+{
+  "_id": "ObjectId",
+  "estimate_id": "EST-ABC12345",
+  "estimate_number": "#001",
+  "customer_name": "John Doe",
+  "customer_phone": "9876543210",
+  "customer_address": "123 Main Street",
+  "sale_by": "Rajesh Goyal",
+  "items": [...],
+  "subtotal": 300.0,
+  "discount_amount": 30.0,
+  "total": 270.0,
+  "created_at": "2024-01-01T12:00:00"
+}
+```
+
+## 🚀 Deployment
+
+### Backend Deployment
+```bash
+# Production server
+uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
+```
+
+### Flutter App Build
+```bash
+# Android APK
+flutter build apk --release
+
+# iOS
+flutter build ios --release
+
+# Windows
+flutter build windows --release
+
+# macOS
+flutter build macos --release
+```
 
 ## 🧪 Testing
 
-### Test Applications
-- `test_stability.dart` - WebSocket and connection stability testing
-- `test_delete_fix.dart` - Delete operation testing
-- `test_optimization.dart` - Performance optimization testing
-
-### Running Tests
+### Backend Tests
 ```bash
-# Stability test
-flutter run test_stability.dart
+cd pos_backend
+python test_api.py
+python test_websocket.py
+```
 
-# Delete operation test
-flutter run test_delete_fix.dart
-
-# Performance test
-flutter run test_optimization.dart
+### Flutter Tests
+```bash
+cd point_of_scale
+flutter test
 ```
 
 ## 📚 Documentation
 
-### Implementation Guides
-- [Payment Breakdown Implementation](PAYMENT_BREAKDOWN_IMPLEMENTATION.md)
-- [WhatsApp Integration Guide](WHATSAPP_INTEGRATION_GUIDE.md)
-- [Performance Optimization Guide](PERFORMANCE_OPTIMIZATION_GUIDE.md)
-- [Backend Load Optimization](BACKEND_LOAD_OPTIMIZATION.md)
-
-### Fix Documentation
-- [Stability Fixes](STABILITY_FIXES.md)
-- [Delete Order Fixes](DELETE_ORDER_FIXES.md)
-- [Performance Fixes](PERFORMANCE_FIXES.md)
-
-## 🚀 Deployment
-
-### Frontend Deployment
-- **Android**: Generate APK with `flutter build apk`
-- **iOS**: Build for App Store with `flutter build ios`
-- **Web**: Deploy to web with `flutter build web`
-
-### Backend Deployment
-- **Render**: Automated deployment from GitHub
-- **Docker**: Containerized deployment
-- **VPS**: Manual server deployment
+- [Backend Setup Guide](pos_backend/SETUP_GUIDE.md)
+- [Real-time Sync Guide](pos_backend/REALTIME_SYNC_GUIDE.md)
+- [WhatsApp Integration Guide](point_of_scale/WHATSAPP_INTEGRATION_GUIDE.md)
+- [Performance Optimization Guide](point_of_scale/PERFORMANCE_OPTIMIZATION_GUIDE.md)
+- [Backend Connection Setup](point_of_scale/BACKEND_CONNECTION_SETUP.md)
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## 📄 License
 
-This project is proprietary software developed for Tirupati Electricals.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 📞 Support
+## 👥 Team
 
-For support and questions:
-- Create an issue in the repository
-- Contact the development team
-- Check the documentation files
+- **Frontend Development**: Flutter Team
+- **Backend Development**: FastAPI Team
+- **UI/UX Design**: Design Team
+- **Project Management**: Product Team
 
-## 🔄 Version History
+## 🆘 Support
 
-### v1.0.0+1 (Current)
-- Complete POS system with real-time features
-- WhatsApp integration
-- Comprehensive reporting
-- Performance optimizations
-- Stability improvements
+- **Issues**: [GitHub Issues](https://github.com/yourusername/tepos-pos/issues)
+- **Documentation**: [Wiki](https://github.com/yourusername/tepos-pos/wiki)
+- **Email**: support@tepos.com
+
+## 🙏 Acknowledgments
+
+- Flutter team for the amazing framework
+- FastAPI for the high-performance backend
+- MongoDB for the flexible database solution
+- All contributors and testers
 
 ---
 
-**TEPOS** - Empowering Tirupati Electricals with modern point-of-sale technology.
+<div align="center">
+  <strong>Built with ❤️ for Tirupati Electricals</strong>
+</div> 
