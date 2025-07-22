@@ -139,14 +139,19 @@ class _HomeScreenState extends State<HomeScreen>
       _webSocketService = WebSocketService(serverUrl: ApiService.webSocketUrl);
       _webSocketService.connect();
       
-      // Add a periodic connection status check with shorter interval for more responsive UI
-      _connectionCheckTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      // Add a periodic connection status check - reduced frequency to save resources
+      _connectionCheckTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
         if (mounted) {
-          // Force UI update when connection status changes
-          setState(() {
-            // This will trigger a rebuild with the latest connection status
-            print('🔌 Connection status check: ${_webSocketService.isConnected ? 'Connected' : 'Disconnected'}');
-          });
+          // Only force UI update when connection status changes
+          bool currentStatus = _webSocketService.isConnected;
+          _webSocketService.checkConnectionStatus();
+          
+          if (currentStatus != _webSocketService.isConnected) {
+            setState(() {
+              // This will trigger a rebuild only when status changes
+              print('🔌 Connection status changed: ${_webSocketService.isConnected ? 'Connected' : 'Disconnected'}');
+            });
+          }
         }
       });
 
@@ -571,137 +576,160 @@ class _HomeScreenState extends State<HomeScreen>
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1A1A1A),
-          title: Row(
-            children: [
-              Icon(
-                _webSocketService.isConnected ? Icons.check_circle : Icons.error,
-                color: _webSocketService.isConnected
-                    ? const Color(0xFF00E676)
-                    : const Color(0xFFFF3D00),
-                size: 24,
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'Connection Status',
-                style: TextStyle(color: Colors.white),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Simple status message
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0D0D0D),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: _webSocketService.isConnected
-                        ? const Color(0xFF4CAF50)
-                        : const Color(0xFFFF5722),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1A1A),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
                   children: [
                     Icon(
-                      _webSocketService.isConnected ? Icons.wifi : Icons.wifi_off,
+                      _webSocketService.isConnected ? Icons.check_circle : Icons.error,
                       color: _webSocketService.isConnected
                           ? const Color(0xFF00E676)
                           : const Color(0xFFFF3D00),
                       size: 24,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Connection Status',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // Status box - completely rebuilt
+                Container(
+                  width: double.infinity,
+                  margin: EdgeInsets.zero,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D0D0D),
+                    borderRadius: BorderRadius.circular(12),
+                    // Border removed
+                  ),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            _webSocketService.isConnected
-                                ? 'Connected to Server'
-                                : 'Disconnected from Server',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Icon(
+                            _webSocketService.isConnected ? Icons.wifi : Icons.wifi_off,
+                            color: _webSocketService.isConnected
+                                ? const Color(0xFF00E676)
+                                : const Color(0xFFFF3D00),
+                            size: 24,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _webSocketService.isConnected
-                                ? 'Your POS system is online and working properly.'
-                                : 'Your POS system is offline. Press "Reconnect" to try again.',
-                            style: TextStyle(
-                              color: _webSocketService.isConnected
-                                  ? const Color(0xFFA5D6A7)
-                                  : const Color(0xFFFFB74D),
-                              fontSize: 12,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _webSocketService.isConnected
+                                      ? 'Connected to Server'
+                                      : 'Disconnected from Server',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _webSocketService.isConnected
+                                      ? 'Your POS system is online and working properly.'
+                                      : 'Your POS system is offline. Press "Reconnect" to try again.',
+                                  style: TextStyle(
+                                    color: _webSocketService.isConnected
+                                        ? const Color(0xFFA5D6A7)
+                                        : const Color(0xFFFFB74D),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Last updated info
+                Row(
+                  children: [
+                    const Icon(Icons.update, color: Color(0xFF9E9E9E), size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Last updated: $lastRefreshText',
+                      style: const TextStyle(color: Color(0xFF9E9E9E), fontSize: 12),
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 12),
-              // Last updated info
-              Row(
-                children: [
-                  const Icon(Icons.update, color: Color(0xFF9E9E9E), size: 16),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Last updated: $lastRefreshText',
-                    style: const TextStyle(color: Color(0xFF9E9E9E), fontSize: 12),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close', style: TextStyle(color: Colors.grey)),
+                const SizedBox(height: 20),
+                // Actions row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Close', style: TextStyle(color: Colors.grey)),
+                    ),
+                    const SizedBox(width: 8),
+                    if (!_webSocketService.isConnected)
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6B8E7F),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          // Force reconnection and check connection status
+                          _webSocketService.connect();
+                          // Wait a moment for connection to establish
+                          Future.delayed(const Duration(milliseconds: 500), () {
+                            if (mounted) {
+                              _webSocketService.checkConnectionStatus();
+                              setState(() {});
+                              _loadData();
+                            }
+                          });
+                        },
+                        child: const Text('Reconnect'),
+                      ),
+                    if (_webSocketService.isConnected)
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6B8E7F),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _loadData();
+                        },
+                        child: const Text('Refresh Data'),
+                      ),
+                  ],
+                ),
+              ],
             ),
-            if (!_webSocketService.isConnected)
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6B8E7F),
-                ),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  // Force reconnection and check connection status
-                  _webSocketService.connect();
-                  // Wait a moment for connection to establish
-                  Future.delayed(const Duration(milliseconds: 500), () {
-                    if (mounted) {
-                      _webSocketService.checkConnectionStatus();
-                      setState(() {
-                        // Force UI update after reconnection attempt
-                      });
-                      // Try to reload data as well
-                      _loadData();
-                    }
-                  });
-                },
-                child: const Text('Reconnect'),
-              ),
-            if (_webSocketService.isConnected)
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6B8E7F),
-                ),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _loadData();
-                },
-                child: const Text('Refresh Data'),
-              ),
-          ],
+          ),
         );
       },
     );
@@ -766,8 +794,7 @@ class _HomeScreenState extends State<HomeScreen>
     // Don't use caching for connection-dependent UI elements
     // Force rebuild every time this method is called
     
-    // For debugging
-    print('🔌 Building header with connection status: ${_webSocketService.isConnected ? 'Connected' : 'Disconnected'}');
+    // Only log when the status has changed (controlled in setState elsewhere)
     
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),

@@ -76,8 +76,8 @@ class WebSocketService {
   ); // Reduced from 2
   static const Duration _maxReconnectDelay = Duration(seconds: 30);
   static const Duration _heartbeatInterval = Duration(
-    seconds: 15,
-  ); // Reduced from 30
+    seconds: 30,
+  ); // Increased from 15 to reduce frequency
 
   // Performance optimization
   static const Duration _debounceDelay = Duration(milliseconds: 300);
@@ -94,15 +94,24 @@ class WebSocketService {
   bool get isHealthy => _isHealthy;
   DateTime? get lastConnectionTime => _lastConnectionTime;
   
-  // Method to manually check and update connection status
+  // Last time connection status was checked and logged
+  DateTime? _lastStatusCheckTime;
+  static const Duration _statusCheckThrottle = Duration(seconds: 10);
+
+  // Method to manually check and update connection status (with reduced logging)
   void checkConnectionStatus() {
     final previousStatus = isConnected;
+    final now = DateTime.now();
+    final shouldLog = _lastStatusCheckTime == null || 
+        now.difference(_lastStatusCheckTime!) > _statusCheckThrottle;
     
     // Check if channel is actually open
     if (_channel == null) {
       _isConnected = false;
       _isHealthy = false;
-      print('🔌 Connection check: No channel exists');
+      if (shouldLog) {
+        print('🔌 Connection check: No channel exists');
+      }
     } else {
       try {
         // Try sending a ping to check connection
@@ -110,16 +119,23 @@ class WebSocketService {
         // If we get here without error, connection is likely ok
         _isConnected = true;
         _isHealthy = true;
-        print('🔌 Connection check: Channel is active');
+        if (shouldLog) {
+          // Only log at reduced frequency or if status changed
+          print('🔌 Connection check: Channel is active');
+        }
       } catch (e) {
-        print('❌ Connection check failed: $e');
+        if (shouldLog) {
+          print('❌ Connection check failed: $e');
+        }
         _isConnected = false;
         _isHealthy = false;
       }
     }
     
     if (previousStatus != isConnected) {
+      // Always log status changes
       print('🔌 Connection status changed to: ${isConnected ? 'Connected' : 'Disconnected'}');
+      _lastStatusCheckTime = now; // Update timestamp on status change
       
       // If status changed from connected to disconnected, try to reconnect
       if (!isConnected) {
@@ -127,6 +143,9 @@ class WebSocketService {
         _reconnectAttempts = 0; // Reset attempts
         connect();
       }
+    } else if (shouldLog) {
+      // Update timestamp if we logged
+      _lastStatusCheckTime = now;
     }
   }
 
@@ -143,13 +162,22 @@ class WebSocketService {
   }
 
   void connect() {
+    // Throttle connection attempts by checking last attempt time
+    final now = DateTime.now();
+    final shouldLog = _lastConnectionTime == null || 
+        now.difference(_lastConnectionTime!) > _statusCheckThrottle;
+        
     if (_isConnected && _isHealthy) {
-      print('🔌 WebSocket already connected and healthy');
+      if (shouldLog) {
+        print('🔌 WebSocket already connected and healthy');
+      }
       return;
     }
 
     try {
-      print('🔌 Connecting to WebSocket: $_serverUrl');
+      if (shouldLog) {
+        print('🔌 Connecting to WebSocket: $_serverUrl');
+      }
 
       // Close existing connection if any
       _channel?.sink.close();
@@ -157,7 +185,7 @@ class WebSocketService {
 
       _channel = WebSocketChannel.connect(Uri.parse(_serverUrl));
       _isConnected = true;
-      _lastConnectionTime = DateTime.now();
+      _lastConnectionTime = now;
 
       // Listen to the stream with error handling
       _channel!.stream.listen(
@@ -205,6 +233,11 @@ class WebSocketService {
     _isHealthy = true;
     _consecutiveFailures = 0;
 
+    // For ping messages, skip verbose processing
+    if (message == 'pong' || message == 'ping') {
+      return;
+    }
+
     // Debounce messages to prevent spam
     if (_lastMessage == message &&
         _lastMessageTime != null &&
@@ -250,7 +283,10 @@ class WebSocketService {
     _isHealthy = false;
     _consecutiveFailures++;
 
-    print('🔌 Connection failure #$_consecutiveFailures');
+    // Log only on first failure or every third failure to reduce spam
+    if (_consecutiveFailures == 1 || _consecutiveFailures % 3 == 0) {
+      print('🔌 Connection failure #$_consecutiveFailures');
+    }
 
     // Close the existing channel
     _channel?.sink.close();
@@ -284,6 +320,7 @@ class WebSocketService {
         try {
           // Send a ping to check connection health
           _channel!.sink.add('ping');
+          // Only log heartbeat failures, not successful pings
         } catch (e) {
           print('❌ Heartbeat failed: $e');
           _handleConnectionFailure();
@@ -311,17 +348,23 @@ class WebSocketService {
     final jitter = Duration(milliseconds: (DateTime.now().millisecond % 500));
     final totalDelay = delay + jitter;
 
-    print(
-      '🔄 Scheduling WebSocket reconnection in ${totalDelay.inSeconds} seconds... (attempt ${_reconnectAttempts + 1})',
-    );
+    // Only log first attempt and every third attempt to reduce spam
+    if (_reconnectAttempts == 0 || _reconnectAttempts % 3 == 0) {
+      print(
+        '🔄 Scheduling WebSocket reconnection in ${totalDelay.inSeconds} seconds... (attempt ${_reconnectAttempts + 1})',
+      );
+    }
 
     _reconnectTimer = Timer(totalDelay, () {
       if (!_isConnected) {
         _reconnectAttempts++;
         if (_reconnectAttempts <= _maxReconnectAttempts) {
-          print(
-            '🔄 Attempting to reconnect WebSocket... (attempt $_reconnectAttempts)',
-          );
+          // Only log first attempt and every third attempt
+          if (_reconnectAttempts == 1 || _reconnectAttempts % 3 == 0) {
+            print(
+              '🔄 Attempting to reconnect WebSocket... (attempt $_reconnectAttempts)',
+            );
+          }
           connect();
         } else {
           print('⚠️ Max reconnection attempts reached, giving up');
