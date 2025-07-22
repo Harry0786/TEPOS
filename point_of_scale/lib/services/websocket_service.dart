@@ -93,6 +93,42 @@ class WebSocketService {
   bool get isConnected => _isConnected && _isHealthy;
   bool get isHealthy => _isHealthy;
   DateTime? get lastConnectionTime => _lastConnectionTime;
+  
+  // Method to manually check and update connection status
+  void checkConnectionStatus() {
+    final previousStatus = isConnected;
+    
+    // Check if channel is actually open
+    if (_channel == null) {
+      _isConnected = false;
+      _isHealthy = false;
+      print('🔌 Connection check: No channel exists');
+    } else {
+      try {
+        // Try sending a ping to check connection
+        _channel!.sink.add('ping');
+        // If we get here without error, connection is likely ok
+        _isConnected = true;
+        _isHealthy = true;
+        print('🔌 Connection check: Channel is active');
+      } catch (e) {
+        print('❌ Connection check failed: $e');
+        _isConnected = false;
+        _isHealthy = false;
+      }
+    }
+    
+    if (previousStatus != isConnected) {
+      print('🔌 Connection status changed to: ${isConnected ? 'Connected' : 'Disconnected'}');
+      
+      // If status changed from connected to disconnected, try to reconnect
+      if (!isConnected) {
+        // Attempt to reconnect
+        _reconnectAttempts = 0; // Reset attempts
+        connect();
+      }
+    }
+  }
 
   // Stream for structured messages
   Stream<WebSocketMessage> get messageStream {
@@ -151,9 +187,15 @@ class WebSocketService {
       // Start heartbeat to monitor connection health
       _startHeartbeat();
 
+      // Force an initial health check
+      _isConnected = true;
+      _isHealthy = true;
+
       print('✅ WebSocket connected successfully');
     } catch (e) {
       print('❌ Failed to connect to WebSocket: $e');
+      _isConnected = false;
+      _isHealthy = false;
       _handleConnectionFailure();
     }
   }

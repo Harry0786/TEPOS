@@ -36,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   // Auto refresh timers - optimized
   Timer? _periodicRefreshTimer;
+  Timer? _connectionCheckTimer;
   DateTime? _lastAppResumeTime;
 
   // Computed values cache with lazy initialization
@@ -60,8 +61,9 @@ class _HomeScreenState extends State<HomeScreen>
     // Cancel timers safely
     try {
       _periodicRefreshTimer?.cancel();
+      _connectionCheckTimer?.cancel();
     } catch (e) {
-      print('⚠️ Error canceling periodic refresh timer: $e');
+      print('⚠️ Error canceling timers: $e');
     }
 
     // Dispose services safely
@@ -136,6 +138,17 @@ class _HomeScreenState extends State<HomeScreen>
     try {
       _webSocketService = WebSocketService(serverUrl: ApiService.webSocketUrl);
       _webSocketService.connect();
+      
+      // Add a periodic connection status check with shorter interval for more responsive UI
+      _connectionCheckTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+        if (mounted) {
+          // Force UI update when connection status changes
+          setState(() {
+            // This will trigger a rebuild with the latest connection status
+            print('🔌 Connection status check: ${_webSocketService.isConnected ? 'Connected' : 'Disconnected'}');
+          });
+        }
+      });
 
       // Handle structured WebSocket messages for efficient updates
       _webSocketService.messageStream.listen(
@@ -548,6 +561,13 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _showConnectionStatus() {
+    // Force connection check before showing dialog
+    _webSocketService.checkConnectionStatus();
+    
+    final lastRefreshText = _lastRefreshTime != null
+        ? _formatTime(_lastRefreshTime!)
+        : 'Never';
+    
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -556,17 +576,16 @@ class _HomeScreenState extends State<HomeScreen>
           title: Row(
             children: [
               Icon(
-                _webSocketService.isConnected ? Icons.wifi : Icons.wifi_off,
-                color:
-                    _webSocketService.isConnected
-                        ? const Color(0xFF4CAF50)
-                        : const Color(0xFFFF5722),
+                _webSocketService.isConnected ? Icons.check_circle : Icons.error,
+                color: _webSocketService.isConnected
+                    ? const Color(0xFF00E676)
+                    : const Color(0xFFFF3D00),
                 size: 24,
               ),
               const SizedBox(width: 8),
-              Text(
+              const Text(
                 'Connection Status',
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: Colors.white),
               ),
             ],
           ),
@@ -574,20 +593,72 @@ class _HomeScreenState extends State<HomeScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildStatusRow(
-                'Status',
-                _webSocketService.isConnected ? 'Connected' : 'Disconnected',
-                _webSocketService.isConnected
-                    ? const Color(0xFF4CAF50)
-                    : const Color(0xFFFF5722),
+              // Simple status message
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D0D0D),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _webSocketService.isConnected
+                        ? const Color(0xFF4CAF50)
+                        : const Color(0xFFFF5722),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _webSocketService.isConnected ? Icons.wifi : Icons.wifi_off,
+                      color: _webSocketService.isConnected
+                          ? const Color(0xFF00E676)
+                          : const Color(0xFFFF3D00),
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _webSocketService.isConnected
+                                ? 'Connected to Server'
+                                : 'Disconnected from Server',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _webSocketService.isConnected
+                                ? 'Your POS system is online and working properly.'
+                                : 'Your POS system is offline. Press "Reconnect" to try again.',
+                            style: TextStyle(
+                              color: _webSocketService.isConnected
+                                  ? const Color(0xFFA5D6A7)
+                                  : const Color(0xFFFFB74D),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              _buildStatusRow('Server', ApiService.webSocketUrl, Colors.grey),
-              _buildStatusRow(
-                'WebSocket',
-                _webSocketService.isConnected ? 'Active' : 'Inactive',
-                _webSocketService.isConnected
-                    ? const Color(0xFF4CAF50)
-                    : const Color(0xFFFF5722),
+              const SizedBox(height: 12),
+              // Last updated info
+              Row(
+                children: [
+                  const Icon(Icons.update, color: Color(0xFF9E9E9E), size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Last updated: $lastRefreshText',
+                    style: const TextStyle(color: Color(0xFF9E9E9E), fontSize: 12),
+                  ),
+                ],
               ),
             ],
           ),
@@ -603,33 +674,36 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 onPressed: () {
                   Navigator.of(context).pop();
+                  // Force reconnection and check connection status
                   _webSocketService.connect();
+                  // Wait a moment for connection to establish
+                  Future.delayed(const Duration(milliseconds: 500), () {
+                    if (mounted) {
+                      _webSocketService.checkConnectionStatus();
+                      setState(() {
+                        // Force UI update after reconnection attempt
+                      });
+                      // Try to reload data as well
+                      _loadData();
+                    }
+                  });
                 },
                 child: const Text('Reconnect'),
+              ),
+            if (_webSocketService.isConnected)
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6B8E7F),
+                ),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _loadData();
+                },
+                child: const Text('Refresh Data'),
               ),
           ],
         );
       },
-    );
-  }
-
-  Widget _buildStatusRow(String label, String value, Color valueColor) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: TextStyle(color: Colors.grey[400], fontSize: 12)),
-          Text(
-            value,
-            style: TextStyle(
-              color: valueColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -689,12 +763,13 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildHeader() {
-    const cacheKey = 'header';
-    if (_widgetCache.containsKey(cacheKey) && !_cacheInvalidated) {
-      return _widgetCache[cacheKey]!;
-    }
-
-    final widget = Container(
+    // Don't use caching for connection-dependent UI elements
+    // Force rebuild every time this method is called
+    
+    // For debugging
+    print('🔌 Building header with connection status: ${_webSocketService.isConnected ? 'Connected' : 'Disconnected'}');
+    
+    return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFF1A1A1A),
@@ -702,27 +777,69 @@ class _HomeScreenState extends State<HomeScreen>
       ),
       child: Row(
         children: [
-          // Logo with optimized image loading
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF6B8E7F).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Image.asset(
-              'assets/icon/TEPOS Logo.png',
-              height: 28,
-              width: 28,
-              cacheWidth: 56,
-              filterQuality: FilterQuality.medium,
+          // Logo with optimized image loading and curved edges - now fully tappable
+          GestureDetector(
+            onTap: () {
+              // Check connection status before showing dialog
+              _webSocketService.checkConnectionStatus();
+              setState(() {
+                // Update UI with current status
+              });
+              _showConnectionStatus();
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(4.0), // Extra padding for easier tapping
+              child: Stack(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14), // Rounded corners for the logo
+                      child: Image.asset(
+                        'assets/icon/TEPOS Logo.png',
+                        height: 42,
+                        width: 42,
+                        cacheWidth: 80,
+                        filterQuality: FilterQuality.medium,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 4,
+                    child: Container(
+                      width: 18, // Slightly larger for better touch target
+                      height: 18,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.transparent,
+                      ),
+                      child: Center(
+                        child: Container(
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            // Use a more vibrant color to make status more visible
+                            color: _webSocketService.isConnected
+                                ? const Color(0xFF00E676) // Brighter green when connected
+                                : const Color(0xFFFF3D00), // Brighter red when disconnected
+                            border: Border.all(color: const Color(0xFF1A1A1A), width: 2),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
+              children: [
+                const Text(
                   'Tirupati Electricals',
                   style: TextStyle(
                     color: Colors.white,
@@ -731,8 +848,12 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
                 Text(
-                  'Point of Sale System',
-                  style: TextStyle(color: Color(0xFF9E9E9E), fontSize: 11),
+                  _webSocketService.isConnected ? 'Online' : 'Offline - Tap logo to reconnect',
+                  style: TextStyle(
+                    color: _webSocketService.isConnected ? const Color(0xFF4CAF50) : const Color(0xFFFF9800),
+                    fontSize: 11,
+                    fontWeight: _webSocketService.isConnected ? FontWeight.normal : FontWeight.bold,
+                  ),
                 ),
               ],
             ),
@@ -740,9 +861,6 @@ class _HomeScreenState extends State<HomeScreen>
         ],
       ),
     );
-
-    _widgetCache[cacheKey] = widget;
-    return widget;
   }
 
   Widget _buildTodayReport() {
