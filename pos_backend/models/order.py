@@ -13,6 +13,7 @@ class OrderCreate(BaseModel):
     is_percentage_discount: bool
     discount_percentage: Optional[float] = None
     total: float
+    amount_paid: Optional[float] = None  # Amount actually paid by customer (can be less than total)
     payment_mode: Optional[str] = "Cash"
     created_at: Optional[str] = None
     source_estimate_id: Optional[str] = None  # If order was created from estimate
@@ -32,6 +33,7 @@ class OrderResponse(BaseModel):
     is_percentage_discount: bool
     discount_percentage: Optional[float] = None
     total: float
+    amount_paid: Optional[float] = None  # Amount actually paid by customer (can be less than total)
     payment_mode: str
     status: str = "Completed"
     created_at: datetime

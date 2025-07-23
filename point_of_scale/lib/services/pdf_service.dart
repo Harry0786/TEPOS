@@ -367,6 +367,7 @@ class PdfService {
     required bool isPercentageDiscount,
     required double total,
     required DateTime createdAt,
+    double? amountPaid,
   }) async {
     final pdf = pw.Document();
 
@@ -651,8 +652,13 @@ class PdfService {
                     pw.Divider(color: PdfColors.grey400),
                     pw.SizedBox(height: 8),
                     _buildSummaryRow(
-                      'Total Paid',
+                      'Total',
                       'Rs. ${total.toStringAsFixed(2)}',
+                    ),
+                    pw.SizedBox(height: 8),
+                    _buildSummaryRow(
+                      'Amount Paid',
+                      'Rs. ${(amountPaid ?? total).toStringAsFixed(2)}',
                       isTotal: true,
                     ),
                   ],

@@ -42,6 +42,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
       TextEditingController();
   final TextEditingController _customerAddressController =
       TextEditingController();
+  // Amount paid controller
+  final TextEditingController _amountPaidController = TextEditingController();
 
   // Payment mode variable
   String _selectedPaymentMode = 'Cash';
@@ -874,6 +876,28 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Amount Paid:',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      'Rs. ${double.tryParse(_amountPaidController.text)?.toStringAsFixed(2) ?? _total.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        color: Color(0xFF6B8E7F),
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -1268,6 +1292,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     _customerAddressController.clear();
     _selectedSaleBy = 'Rajesh Goyal'; // Reset to default
     _selectedPaymentMode = 'Cash'; // Reset to default
+    _amountPaidController.text = _total.toString(); // Set default to total
 
     showDialog(
       context: context,
@@ -1419,6 +1444,32 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                           activeColor: const Color(0xFF6B8E7F),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Amount Paid field
+                    TextField(
+                      controller: _amountPaidController,
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        labelText: 'Amount Paid',
+                        labelStyle: TextStyle(color: Colors.grey[400]),
+                        enabledBorder: OutlineInputBorder(
+                          borderSide: const BorderSide(
+                            color: Color(0xFF2A2A2A),
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: const BorderSide(
+                            color: Color(0xFF6B8E7F),
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFF0D0D0D),
+                      ),
                     ),
                   ],
                 ),
@@ -1867,6 +1918,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         total: _total,
         paymentMode: _selectedPaymentMode,
         createdAt: DateTime.now().toIso8601String(),
+        amountPaid: double.tryParse(_amountPaidController.text) ?? _total,
       ).timeout(
         const Duration(seconds: 30),
         onTimeout: () {
@@ -2115,6 +2167,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         isPercentageDiscount: _isPercentageDiscount,
         total: _total,
         createdAt: DateTime.now(),
+        amountPaid: double.tryParse(_amountPaidController.text),
       );
 
       // Close loading dialog
@@ -2209,6 +2262,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     _customerNameController.dispose();
     _customerWhatsAppController.dispose();
     _customerAddressController.dispose();
+    _amountPaidController.dispose();
     _performanceService.dispose();
     super.dispose();
   }

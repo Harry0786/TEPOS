@@ -120,6 +120,7 @@ class ApiService {
     required String estimateId,
     String? paymentMode,
     String? saleBy,
+    double? amountPaid,
   }) async {
     final requestKey = 'convertEstimate_$estimateId';
     return _preventDuplicateRequest(
@@ -140,6 +141,7 @@ class ApiService {
         final Map<String, dynamic> requestBody = {};
         if (paymentMode != null) requestBody['payment_mode'] = paymentMode;
         if (saleBy != null) requestBody['sale_by'] = saleBy;
+        if (amountPaid != null) requestBody['amount_paid'] = amountPaid;
 
         final response = await http
             .post(url, headers: headers, body: json.encode(requestBody))
@@ -190,6 +192,7 @@ class ApiService {
     required double total,
     String? paymentMode,
     String? createdAt,
+    double? amountPaid,
   }) async {
     final requestKey =
         'createCompletedSale_${DateTime.now().millisecondsSinceEpoch}';
@@ -217,6 +220,7 @@ class ApiService {
           'is_percentage_discount': isPercentageDiscount,
           'total': total,
           'created_at': createdAt ?? DateTime.now().toIso8601String(),
+          'amount_paid': amountPaid ?? total, // Default to total if not provided
         };
         // Add payment mode if provided
         if (paymentMode != null) {

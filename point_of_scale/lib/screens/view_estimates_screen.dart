@@ -1045,6 +1045,8 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                         estimateId: estimate['estimate_id'] ?? estimate['id'],
                         paymentMode: selectedPaymentMode,
                         saleBy: selectedSaleBy,
+                        amountPaid: double.tryParse(amountPaidController.text) ?? 
+                          (estimate['total'] ?? 0.0),
                       ).timeout(
                         const Duration(
                           seconds: 25,

@@ -49,7 +49,7 @@ async def get_today_report():
         
         # Calculate orders statistics with detailed payment breakdown
         orders_count = len(today_orders)
-        orders_total = sum(order.get("total", 0) for order in today_orders)
+        orders_total = sum(order.get("amount_paid", order.get("total", 0)) for order in today_orders)
         
         # Calculate payment mode breakdown with amounts
         payment_breakdown = {
@@ -64,7 +64,7 @@ async def get_today_report():
         
         for order in today_orders:
             payment_mode = order.get("payment_mode", "").lower()
-            amount = order.get("total", 0) or order.get("amount", 0)
+            amount = order.get("amount_paid", order.get("total", 0))
             
             if payment_mode in payment_breakdown:
                 payment_breakdown[payment_mode]["count"] += 1
@@ -141,7 +141,7 @@ async def get_date_range_report(start_date: str, end_date: str):
         estimates_count = len(estimates)
         estimates_total = sum(estimate.get("total", 0) for estimate in estimates)
         orders_count = len(orders)
-        orders_total = sum(order.get("total", 0) for order in orders)
+        orders_total = sum(order.get("amount_paid", order.get("total", 0)) for order in orders)
         
         return {
             "date_range": {
@@ -220,7 +220,7 @@ async def get_monthly_report(year: int, month: int):
             if date_key not in daily_orders:
                 daily_orders[date_key] = {"count": 0, "total": 0}
             daily_orders[date_key]["count"] += 1
-            daily_orders[date_key]["total"] += order.get("total", 0)
+            daily_orders[date_key]["total"] += order.get("amount_paid", order.get("total", 0))
         
         return {
             "period": {
@@ -233,7 +233,7 @@ async def get_monthly_report(year: int, month: int):
                 "total_estimates": len(estimates),
                 "total_orders": len(orders),
                 "total_estimates_amount": sum(e.get("total", 0) for e in estimates),
-                "total_orders_amount": sum(o.get("total", 0) for o in orders)
+                "total_orders_amount": sum(o.get("amount_paid", o.get("total", 0)) for o in orders)
             },
             "daily_breakdown": {
                 "estimates": daily_estimates,
@@ -294,9 +294,10 @@ async def get_staff_performance_report():
                 }
             
             staff_performance[staff_name]["orders_count"] += 1
-            staff_performance[staff_name]["orders_total"] += order.get("total", 0)
+            order_amount = order.get("amount_paid", order.get("total", 0))
+            staff_performance[staff_name]["orders_total"] += order_amount
             staff_performance[staff_name]["total_transactions"] += 1
-            staff_performance[staff_name]["total_revenue"] += order.get("total", 0)
+            staff_performance[staff_name]["total_revenue"] += order_amount
         
         # Convert to list and sort by total revenue
         staff_list = [
@@ -376,7 +377,7 @@ async def get_orders_report():
         
         # Calculate statistics
         total_orders = len(orders)
-        total_amount = sum(order.get("total", 0) for order in orders)
+        total_amount = sum(order.get("amount_paid", order.get("total", 0)) for order in orders)
         
         # Payment mode breakdown
         payment_counts = {}

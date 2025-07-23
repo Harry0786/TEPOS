@@ -468,7 +468,8 @@ class _HomeScreenState extends State<HomeScreen>
       if (status == 'completed' && isToday) {
         completedSales++;
         totalOrders++;
-        final amount = order['amount'] ?? order['total'] ?? 0.0;
+        // Use amount_paid instead of total for sales calculations
+        final amount = order['amount_paid'] ?? order['amount'] ?? order['total'] ?? 0.0;
         totalSales += (amount is num) ? amount.toDouble() : 0.0;
       }
     }
@@ -1134,7 +1135,8 @@ class _HomeScreenState extends State<HomeScreen>
       final createdAt = _parseDate(order['created_at']);
       if (status == 'completed' && _isToday(createdAt)) {
         final paymentMode = order['payment_mode']?.toString() ?? 'Other';
-        final amount = order['total'] ?? order['amount'] ?? 0.0;
+        // Use amount_paid instead of total for accurate payment breakdown
+        final amount = order['amount_paid'] ?? order['amount'] ?? order['total'] ?? 0.0;
         if (!breakdown.containsKey(paymentMode)) {
           breakdown[paymentMode] = {'count': 0, 'amount': 0.0};
         }

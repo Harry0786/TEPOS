@@ -117,6 +117,7 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
         'sale_number': message.data!['sale_number'],
         'customer_name': message.data!['customer_name'],
         'total': message.data!['total'],
+        'amount_paid': message.data!['amount_paid'] ?? message.data!['total'],
         'created_at': message.data!['created_at'],
         'status': 'Completed',
         // Add other required fields with defaults
@@ -327,6 +328,10 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
                 _buildDetailRow(
                   'Total',
                   'Rs. ${order['total'].toStringAsFixed(2)}',
+                ),
+                _buildDetailRow(
+                  'Amount Paid',
+                  'Rs. ${(order['amount_paid'] ?? order['total']).toStringAsFixed(2)}',
                   isTotal: true,
                 ),
               ],
@@ -554,6 +559,7 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
         total: order['total'] ?? order['amount'] ?? 0.0,
         createdAt:
             DateTime.tryParse(order['created_at'].toString()) ?? DateTime.now(),
+        amountPaid: order['amount_paid'] ?? order['total'] ?? 0.0,
       );
 
       // Close loading dialog
