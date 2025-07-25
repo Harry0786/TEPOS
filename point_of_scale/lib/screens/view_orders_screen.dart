@@ -800,7 +800,7 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
                                             CrossAxisAlignment.end,
                                         children: [
                                           Text(
-                                            'Rs. ${(order['total'] ?? order['amount'] ?? 0.0).toStringAsFixed(0)}',
+                                            'Rs. ${(order['amount_paid'] ?? order['total'] ?? order['amount'] ?? 0.0).toStringAsFixed(0)}',
                                             style: const TextStyle(
                                               color: Color(0xFF6B8E7F),
                                               fontSize: 16,

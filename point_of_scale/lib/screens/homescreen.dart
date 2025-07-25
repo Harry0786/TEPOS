@@ -2124,17 +2124,39 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _forceRefresh() async {
     print('🔄 Force refreshing data...');
 
+    // Check connection status first
+    _webSocketService.checkConnectionStatus();
+    
+    // Force UI update to show current connection status
+    if (mounted) {
+      setState(() {
+        // This will update the connection dot color immediately
+      });
+    }
+
     // Invalidate cache and load fresh data
     _invalidateCache();
 
     await _loadData();
 
+    // Check connection status again after data load
+    _webSocketService.checkConnectionStatus();
+    
+    // Final UI update to ensure connection status is current
     if (mounted) {
+      setState(() {
+        // Final state update with current connection status
+      });
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Data refreshed successfully!'),
-          backgroundColor: Color(0xFF6B8E7F),
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: Text(_webSocketService.isConnected 
+              ? 'Data refreshed successfully!' 
+              : 'Not connected, try again'),
+          backgroundColor: _webSocketService.isConnected 
+              ? const Color(0xFF6B8E7F) 
+              : Colors.red,
+          duration: const Duration(seconds: 2),
         ),
       );
     }
