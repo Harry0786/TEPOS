@@ -98,6 +98,8 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
 
   void _handleEstimateCreated(WebSocketMessage message) {
     print('➕ Handling estimate created: ${message.id}');
+    if (!mounted) return;
+    
     if (message.data != null) {
       // Add the new estimate to the list
       final newEstimate = {
@@ -119,22 +121,27 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
         'status': 'Pending',
       };
 
-      setState(() {
-        _estimates.insert(0, newEstimate);
-        _filteredEstimates = _applyFilter(_estimates);
-      });
+      if (mounted) {
+        setState(() {
+          _estimates.insert(0, newEstimate);
+          _filteredEstimates = _applyFilter(_estimates);
+        });
+      }
 
       print('✅ Estimate added to list: ${message.data!['estimate_number']}');
     } else {
       // No data provided, do full refresh
       print('⚠️ No data in create message - doing full refresh');
       ApiService.clearCache();
-      _fetchEstimates();
+      if (mounted) {
+        _fetchEstimates();
+      }
     }
   }
 
   void _handleEstimateDeleted(WebSocketMessage message) {
     print('🗑️ Handling estimate deleted: ${message.id}');
+    if (!mounted) return;
 
     setState(() {
       _estimates.removeWhere(
@@ -150,6 +157,7 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
 
   void _handleEstimateConvertedToOrder(WebSocketMessage message) {
     print('🔄 Handling estimate converted to order: ${message.id}');
+    if (!mounted) return;
 
     // Remove the estimate from the list since it's now an order
     setState(() {
@@ -176,22 +184,28 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
   }
 
   Future<void> _fetchEstimates() async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
     try {
       final estimates = await ApiService.fetchEstimates(forceClearCache: true);
-      setState(() {
-        _estimates = estimates ?? [];
-        _filteredEstimates = _applyFilter(estimates ?? []);
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _estimates = estimates;
+          _filteredEstimates = _applyFilter(estimates);
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'Failed to load estimates. Please try again.';
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Failed to load estimates. Please try again.';
+        });
+      }
     }
   }
 
@@ -211,6 +225,8 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
   }
 
   void _onSearchChanged(String value) {
+    if (!mounted) return;
+    
     setState(() {
       _searchQuery = value;
       _filteredEstimates = _applyFilter(_estimates);
@@ -242,9 +258,11 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
           print('⚠️ Alternative dialog close also failed: $altError');
         }
       } finally {
-        setState(() {
-          _isConversionDialogShown = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isConversionDialogShown = false;
+          });
+        }
         _conversionTimeoutTimer?.cancel();
         print('🔄 Dialog state reset to false');
       }
@@ -260,16 +278,18 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
     print('🚨 Force closing conversion dialog');
     try {
       // Try to close any open dialogs
-      if (Navigator.of(context).canPop()) {
+      if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
         print('✅ Force closed dialog');
       }
     } catch (e) {
       print('⚠️ Force close failed: $e');
     } finally {
-      setState(() {
-        _isConversionDialogShown = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isConversionDialogShown = false;
+        });
+      }
       _conversionTimeoutTimer?.cancel();
     }
   }
@@ -569,7 +589,6 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                 _buildDetailRow('Phone', estimate['customer_phone'] ?? ''),
                 _buildDetailRow('Address', estimate['customer_address'] ?? ''),
                 _buildDetailRow('Sale By', estimate['sale_by'] ?? ''),
-                _buildDetailRow('Status', estimate['status'] ?? ''),
                 _buildDetailRow(
                   'Date',
                   (() {
@@ -779,35 +798,41 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
   }
 
   void _updateEstimateStatus(String estimateId, String newStatus) async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Updating status...'),
-        backgroundColor: Color(0xFF6B8E7F),
-        duration: Duration(seconds: 1),
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Updating status...'),
+          backgroundColor: Color(0xFF6B8E7F),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
     final result = await ApiService.updateOrderStatus(estimateId, newStatus);
     if (result['success']) {
-      setState(() {
-        final index = _estimates.indexWhere((e) => e['id'] == estimateId);
-        if (index != -1) {
-          _estimates[index]['status'] = newStatus;
-          _filteredEstimates = _applyFilter(_estimates);
-        }
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Estimate status updated to $newStatus'),
-          backgroundColor: const Color(0xFF6B8E7F),
-        ),
-      );
+      if (mounted) {
+        setState(() {
+          final index = _estimates.indexWhere((e) => e['id'] == estimateId);
+          if (index != -1) {
+            _estimates[index]['status'] = newStatus;
+            _filteredEstimates = _applyFilter(_estimates);
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Estimate status updated to $newStatus'),
+            backgroundColor: const Color(0xFF6B8E7F),
+          ),
+        );
+      }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update status: ${result['message']}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update status: ${result['message']}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -987,9 +1012,11 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                     }
 
                     try {
-                      setState(() {
-                        _isConversionDialogShown = true;
-                      });
+                      if (mounted) {
+                        setState(() {
+                          _isConversionDialogShown = true;
+                        });
+                      }
 
                       showDialog(
                         context: context,
@@ -1026,9 +1053,11 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                       );
                     } catch (dialogError) {
                       print('⚠️ Error showing loading dialog: $dialogError');
-                      setState(() {
-                        _isConversionDialogShown = false;
-                      });
+                      if (mounted) {
+                        setState(() {
+                          _isConversionDialogShown = false;
+                        });
+                      }
                     }
 
                     try {

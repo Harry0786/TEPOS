@@ -1724,10 +1724,15 @@ class _HomeScreenState extends State<HomeScreen>
         item['order_id'] ??
         item['id'] ??
         '';
+    // For orders, use amount_paid; for estimates, use total
     final double amount =
-        (item['amount'] ?? item['total'] ?? 0.0) is num
-            ? (item['amount'] ?? item['total'] ?? 0.0).toDouble()
-            : 0.0;
+        (item['type'] == 'order') 
+            ? ((item['amount_paid'] ?? item['total'] ?? 0.0) is num
+                ? (item['amount_paid'] ?? item['total'] ?? 0.0).toDouble()
+                : 0.0)
+            : ((item['total'] ?? 0.0) is num
+                ? (item['total'] ?? 0.0).toDouble()
+                : 0.0);
     final String dateTimeStr = item['created_at']?.toString() ?? '';
     DateTime? dateTime;
     try {

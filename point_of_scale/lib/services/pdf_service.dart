@@ -51,7 +51,7 @@ class PdfService {
                     ),
                     pw.SizedBox(height: 8),
                     pw.Text(
-                      'Estimate $estimateNumber',
+                      'Estimate No. $estimateNumber',
                       style: pw.TextStyle(
                         fontSize: 16,
                         fontWeight: pw.FontWeight.bold,
@@ -71,6 +71,32 @@ class PdfService {
               ),
 
               pw.SizedBox(height: 20),
+
+              // Sale By positioned on the right above customer details
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Expanded(child: pw.Container()), // Empty space on left
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColors.grey100,
+                      borderRadius: pw.BorderRadius.circular(4),
+                      border: pw.Border.all(color: PdfColors.grey300),
+                    ),
+                    child: pw.Text(
+                      'Sale By: $saleBy',
+                      style: pw.TextStyle(
+                        fontSize: 12,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.black,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              pw.SizedBox(height: 10),
 
               // Customer Details
               pw.Container(
@@ -95,7 +121,6 @@ class PdfService {
                     _buildDetailRow('Name', customerName),
                     _buildDetailRow('Phone', customerPhone),
                     _buildDetailRow('Address', customerAddress),
-                    _buildDetailRow('Sale By', saleBy),
                   ],
                 ),
               ),
@@ -422,6 +447,32 @@ class PdfService {
 
               pw.SizedBox(height: 20),
 
+              // Sale By positioned on the right above customer details
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Expanded(child: pw.Container()), // Empty space on left
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColors.grey100,
+                      borderRadius: pw.BorderRadius.circular(4),
+                      border: pw.Border.all(color: PdfColors.grey300),
+                    ),
+                    child: pw.Text(
+                      'Sale By: $saleBy',
+                      style: pw.TextStyle(
+                        fontSize: 12,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.black,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              pw.SizedBox(height: 10),
+
               // Customer Details
               pw.Container(
                 width: double.infinity,
@@ -445,7 +496,6 @@ class PdfService {
                     _buildDetailRow('Name', customerName),
                     _buildDetailRow('Phone', customerPhone),
                     _buildDetailRow('Address', customerAddress),
-                    _buildDetailRow('Sale By', saleBy),
                   ],
                 ),
               ),

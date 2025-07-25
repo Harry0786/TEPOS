@@ -75,24 +75,49 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
       _estimateFontSize = 12.0;
       return;
     }
-    // Find the longest row string
-    double maxWidth = constraints.maxWidth;
-    double minFontSize = 8.0;
+    
+    // Available width for the row content (accounting for padding and spacing)
+    double availableWidth = constraints.maxWidth - 64; // 32px padding on each side + margins
+    double minFontSize = 7.0;
     double maxFontSize = 12.0;
     double fontSize = maxFontSize;
+    
+    // Find the longest item row and calculate required font size
     for (var item in _cartItems) {
-      String row =
-          '${item['name']}  Rs. ${item['price'].toStringAsFixed(2)}  ${item['quantity']}  ${(item['discount'] ?? 0).toStringAsFixed(1)}%  Rs. ${((item['price'] * item['quantity']) * (1 - ((item['discount'] ?? 0) / 100))).toStringAsFixed(2)}';
-      // Estimate width: assume 0.6 * fontSize * row.length (roughly)
-      double estWidth = row.length * fontSize * 0.6;
-      while (estWidth > maxWidth && fontSize > minFontSize) {
-        fontSize -= 0.5;
-        estWidth = row.length * fontSize * 0.6;
+      // Construct the full text that will be displayed in one line
+      String productName = item['name'] ?? '';
+      String quantity = '${item['quantity']}';
+      String discount = '${(item['discount'] ?? 0).toStringAsFixed(1)}%';
+      String rate = 'Rs. ${item['price'].toStringAsFixed(2)}';
+      String total = 'Rs. ${((item['price'] * item['quantity']) * (1 - ((item['discount'] ?? 0) / 100))).toStringAsFixed(2)}';
+      
+      // Estimate character width for each column
+      double productNameWidth = productName.length * fontSize * 0.55;
+      double rateWidth = rate.length * fontSize * 0.52;
+      double quantityWidth = quantity.length * fontSize * 0.52;
+      double discountWidth = discount.length * fontSize * 0.52;
+      double totalWidth = total.length * fontSize * 0.52;
+      
+      // Total estimated width with spacing
+      double estimatedWidth = productNameWidth + rateWidth + quantityWidth + discountWidth + totalWidth + 40; // 40px for spacing
+      
+      // Reduce font size if content doesn't fit
+      while (estimatedWidth > availableWidth && fontSize > minFontSize) {
+        fontSize -= 0.2;
+        productNameWidth = productName.length * fontSize * 0.55;
+        rateWidth = rate.length * fontSize * 0.52;
+        quantityWidth = quantity.length * fontSize * 0.52;
+        discountWidth = discount.length * fontSize * 0.52;
+        totalWidth = total.length * fontSize * 0.52;
+        estimatedWidth = productNameWidth + rateWidth + quantityWidth + discountWidth + totalWidth + 40;
       }
+      
       if (fontSize < _estimateFontSize) {
         _estimateFontSize = fontSize;
       }
     }
+    
+    // Ensure font size is within bounds
     if (_estimateFontSize < minFontSize) _estimateFontSize = minFontSize;
     if (_estimateFontSize > maxFontSize) _estimateFontSize = maxFontSize;
   }
@@ -109,6 +134,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     _cachedTotal = null;
     _cachedDiscountAmount = null;
     _cacheInvalidated = true;
+    // Reset font size to trigger recalculation on next layout
+    _estimateFontSize = 12.0;
   }
 
   void _showAddProductDialog() {
@@ -263,6 +290,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         'discount': discount,
       });
       _invalidateCache();
+      // Reset font size to trigger recalculation
+      _estimateFontSize = 12.0;
     });
 
     _performanceService.endOperation('NewSaleScreen.addNewProduct');
@@ -475,6 +504,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         _cartItems[index]['discount'] = discount;
       }
       _invalidateCache();
+      // Reset font size to trigger recalculation
+      _estimateFontSize = 12.0;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -493,6 +524,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     setState(() {
       _cartItems.removeWhere((item) => item['id'] == productId);
       _invalidateCache();
+      // Reset font size to trigger recalculation
+      _estimateFontSize = 12.0;
     });
 
     _performanceService.endOperation('NewSaleScreen.removeFromCart');
@@ -634,7 +667,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                     _buildInputField('Address', _customerAddressController),
                     const SizedBox(height: 12),
 
-                    // Sale By (move here)
+                    // Sale By dropdown
                     DropdownButtonFormField<String>(
                       value: _selectedSaleBy,
                       dropdownColor: const Color(0xFF1A1A1A),
@@ -656,18 +689,17 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                         filled: true,
                         fillColor: const Color(0xFF0D0D0D),
                       ),
-                      items:
-                          _saleByOptions
-                              .map(
-                                (option) => DropdownMenuItem<String>(
-                                  value: option,
-                                  child: Text(
-                                    option,
-                                    style: const TextStyle(color: Colors.white),
-                                  ),
-                                ),
-                              )
-                              .toList(),
+                      items: _saleByOptions
+                          .map(
+                            (option) => DropdownMenuItem<String>(
+                              value: option,
+                              child: Text(
+                                option,
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ),
+                          )
+                          .toList(),
                       onChanged: (value) {
                         setDialogState(() {
                           _selectedSaleBy = value ?? _selectedSaleBy;
@@ -723,182 +755,328 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
             style: TextStyle(color: Colors.white),
           ),
           content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'TIRUPATI ELECTRICALS',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Estimate $_currentEstimateNumber',
-                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Date: ${DateTime.now().toString().split(' ')[0]}',
-                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                ),
-                const SizedBox(height: 16),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Update font size calculation for the current cart items
+                _updateEstimateFontSize(constraints);
+                
+                // Calculate optimal font size for the dialog
+                double dialogFontSize = _estimateFontSize;
+                if (constraints.maxWidth < 300) {
+                  dialogFontSize = _estimateFontSize * 0.9;
+                }
+                
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'TIRUPATI ELECTRICALS',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Estimate No. $_currentEstimateNumber',
+                      style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Date: ${DateTime.now().toString().split(' ')[0]}',
+                      style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                    ),
+                    const SizedBox(height: 16),
 
-                // Customer Details
-                const Text(
-                  'Customer Details:',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Name: ${_customerNameController.text}',
-                  style: TextStyle(color: Colors.grey[300], fontSize: 12),
-                ),
-                const SizedBox(height: 2),
-                if (_customerWhatsAppController.text.isNotEmpty) ...[
-                  Text(
-                    'Phone: ${_customerWhatsAppController.text}',
-                    style: TextStyle(color: Colors.grey[300], fontSize: 12),
-                  ),
-                  const SizedBox(height: 2),
-                ],
-                Text(
-                  'Address: ${_customerAddressController.text}',
-                  style: TextStyle(color: Colors.grey[300], fontSize: 12),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Sale By: $_selectedSaleBy',
-                  style: TextStyle(color: Colors.grey[300], fontSize: 12),
-                ),
-                const SizedBox(height: 16),
-
-                // Items
-                const Text(
-                  'Items:',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                ..._cartItems.map(
-                  (item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    // Sale By positioned on the right
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Expanded(
-                          child: Text(
-                            '${item['name']} x${item['quantity']} (${(item['discount'] ?? 0).toStringAsFixed(1)}% off)',
-                            style: TextStyle(
-                              color: Colors.grey[300],
-                              fontSize: 12,
-                            ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2A2A2A),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFF6B8E7F)),
                           ),
-                        ),
-                        Text(
-                          'Rs. ${((item['price'] * item['quantity']) * (1 - ((item['discount'] ?? 0) / 100))).toStringAsFixed(2)}',
-                          style: TextStyle(
-                            color: Colors.grey[300],
-                            fontSize: 12,
+                          child: Text(
+                            'Sale By: $_selectedSaleBy',
+                            style: const TextStyle(
+                              color: Color(0xFF6B8E7F),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ),
+                    const SizedBox(height: 8),
 
-                const SizedBox(height: 12),
-                const Divider(color: Color(0xFF2A2A2A)),
-                const SizedBox(height: 8),
-
-                // Summary
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Subtotal:',
-                      style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                    ),
-                    Text(
-                      'Rs. ${_subtotal.toStringAsFixed(2)}',
-                      style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                    ),
-                  ],
-                ),
-
-                if (_discountAmount > 0) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Discount (${_getDiscountPercentage()}):',
-                        style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                    // Customer Details Header
+                    const Text(
+                      'Customer Details:',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Name: ${_customerNameController.text}',
+                      style: TextStyle(color: Colors.grey[300], fontSize: 12),
+                    ),
+                    const SizedBox(height: 2),
+                    if (_customerWhatsAppController.text.isNotEmpty) ...[
                       Text(
-                        '- Rs. ${_getDiscountAmount().toStringAsFixed(2)}',
-                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                        'Phone: ${_customerWhatsAppController.text}',
+                        style: TextStyle(color: Colors.grey[300], fontSize: 12),
+                      ),
+                      const SizedBox(height: 2),
+                    ],
+                    Text(
+                      'Address: ${_customerAddressController.text}',
+                      style: TextStyle(color: Colors.grey[300], fontSize: 12),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Items Header
+                    const Text(
+                      'Items:',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Items table with automatic font sizing
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFF2A2A2A)),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Column(
+                        children: [
+                          // Table Header
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF0D0D0D),
+                              border: Border(bottom: BorderSide(color: Color(0xFF2A2A2A))),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: Text(
+                                    'Product',
+                                    style: TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: dialogFontSize,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 50,
+                                  child: Text(
+                                    'Rate',
+                                    style: TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: dialogFontSize,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 35,
+                                  child: Text(
+                                    'Qty',
+                                    style: TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: dialogFontSize,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 40,
+                                  child: Text(
+                                    'Disc%',
+                                    style: TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: dialogFontSize,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 55,
+                                  child: Text(
+                                    'Total',
+                                    style: TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: dialogFontSize,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.right,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Table Rows with single line guarantee
+                          ..._cartItems.map(
+                            (item) => Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: const Color(0xFF2A2A2A).withOpacity(0.5),
+                                  ),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    flex: 3,
+                                    child: Text(
+                                      item['name'],
+                                      style: TextStyle(
+                                        color: Colors.grey[300],
+                                        fontSize: dialogFontSize,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: 50,
+                                    child: Text(
+                                      'Rs.${item['price'].toStringAsFixed(0)}',
+                                      style: TextStyle(
+                                        color: Colors.grey[300],
+                                        fontSize: dialogFontSize,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: 35,
+                                    child: Text(
+                                      '${item['quantity']}',
+                                      style: TextStyle(
+                                        color: Colors.grey[300],
+                                        fontSize: dialogFontSize,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 1,
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: 40,
+                                    child: Text(
+                                      '${(item['discount'] ?? 0).toStringAsFixed(0)}%',
+                                      style: TextStyle(
+                                        color: Colors.redAccent,
+                                        fontSize: dialogFontSize,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 1,
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: 55,
+                                    child: Text(
+                                      'Rs.${((item['price'] * item['quantity']) * (1 - ((item['discount'] ?? 0) / 100))).toStringAsFixed(0)}',
+                                      style: TextStyle(
+                                        color: const Color(0xFF6B8E7F),
+                                        fontSize: dialogFontSize,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      textAlign: TextAlign.right,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+                    const Divider(color: Color(0xFF2A2A2A)),
+                    const SizedBox(height: 8),
+
+                    // Summary
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Subtotal:',
+                          style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                        ),
+                        Text(
+                          'Rs. ${_subtotal.toStringAsFixed(2)}',
+                          style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                        ),
+                      ],
+                    ),
+
+                    if (_discountAmount > 0) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Discount (${_getDiscountPercentage()}):',
+                            style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                          ),
+                          Text(
+                            '- Rs. ${_getDiscountAmount().toStringAsFixed(2)}',
+                            style: const TextStyle(color: Colors.red, fontSize: 12),
+                          ),
+                        ],
                       ),
                     ],
-                  ),
-                ],
 
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Total:',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      'Rs. ${_total.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        color: Color(0xFF6B8E7F),
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Amount Paid:',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      'Rs. ${double.tryParse(_amountPaidController.text)?.toStringAsFixed(2) ?? _total.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        color: Color(0xFF6B8E7F),
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Total:',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          'Rs. ${_total.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            color: Color(0xFF6B8E7F),
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
-                ),
-              ],
+                );
+              },
             ),
           ),
           actions: [
@@ -980,9 +1158,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         File? pdfFile;
         try {
           pdfFile = await PdfService.generateEstimatePdf(
-            estimateNumber:
-                response['estimate_number'] ??
-                'EST-${DateTime.now().millisecondsSinceEpoch}',
+            estimateNumber: response['estimate_number'] ?? _currentEstimateNumber,
             customerName: _customerNameController.text,
             customerPhone: _customerWhatsAppController.text,
             customerAddress: _customerAddressController.text,
@@ -1072,14 +1248,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 size: 48,
               ),
               const SizedBox(height: 16),
-              Text(
-                'Estimate has been created for ${_customerNameController.text}',
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Phone: ${_customerWhatsAppController.text}',
-                style: TextStyle(color: Colors.grey[400], fontSize: 12),
+              const Text(
+                'Estimate created successfully!',
+                style: TextStyle(color: Colors.white, fontSize: 14),
               ),
               if (response['estimate_number'] != null &&
                   response['estimate_number'].isNotEmpty) ...[
@@ -1091,7 +1262,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               ],
               const SizedBox(height: 16),
               const Text(
-                'Estimate saved successfully! You can now print it:',
+                'You can now print it:',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 12,
@@ -2217,6 +2388,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
       _cartItems.clear();
       _discountAmount = 0.0;
       _invalidateCache();
+      // Reset font size to default when cart is cleared
+      _estimateFontSize = 12.0;
     });
   }
 
