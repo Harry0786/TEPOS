@@ -1311,17 +1311,19 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                     )
                     : Column(
-                      children:
-                          _recentOrders
-                              .asMap()
-                              .entries
-                              .take(5)
-                              .map((entry) => _OrderItemWidget(
-                                key: ValueKey('order_${entry.value['id']}_${entry.key}'),
-                                item: entry.value,
-                                isLast: entry.key == _recentOrders.length - 1,
-                              ))
-                              .toList(),
+                      children: [
+                        // Data rows
+                        ..._recentOrders
+                            .asMap()
+                            .entries
+                            .take(5)
+                            .map((entry) => _OrderItemWidget(
+                              key: ValueKey('order_${entry.value['id']}_${entry.key}'),
+                              item: entry.value,
+                              isLast: entry.key == _recentOrders.length - 1,
+                            ))
+                            .toList(),
+                      ],
                     ),
           ),
         ),
@@ -1560,7 +1562,7 @@ class _OrderItemWidget extends StatelessWidget {
         dateTime != null ? DateFormat('hh:mm a').format(dateTime) : '';
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         border:
             isLast
@@ -1569,80 +1571,76 @@ class _OrderItemWidget extends StatelessWidget {
                   bottom: BorderSide(color: Color(0xFF3A3A3A), width: 0.5),
                 ),
       ),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Flexible(
-              flex: 3,
-              fit: FlexFit.tight,
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: typeColor.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      typeLabel,
-                      style: TextStyle(
-                        color: typeColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    fit: FlexFit.tight,
-                    child: Text(
-                      number,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 6,
+                vertical: 3,
+              ),
+              decoration: BoxDecoration(
+                color: typeColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                typeLabel,
+                style: TextStyle(
+                  color: typeColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            Flexible(
-              flex: 2,
-              fit: FlexFit.tight,
+          ),
+          Expanded(
+            flex: 3,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 8.0),
               child: Text(
-                'Rs. ${amount.toStringAsFixed(2)}',
+                number,
                 style: const TextStyle(
-                  color: Color(0xFF6B8E7F),
-                  fontSize: 15,
+                  color: Colors.white,
+                  fontSize: 13,
                   fontWeight: FontWeight.bold,
                 ),
-                textAlign: TextAlign.right,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+                overflow: TextOverflow.visible,
               ),
             ),
-            Flexible(
-              flex: 2,
-              fit: FlexFit.tight,
-              child: Text(
-                formattedTime,
-                style: TextStyle(color: Colors.grey[400], fontSize: 13),
-                textAlign: TextAlign.right,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              'Rs. ${amount.toStringAsFixed(0)}',
+              style: const TextStyle(
+                color: Color(0xFF6B8E7F),
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
               ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-          ],
-        ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              formattedTime,
+              style: TextStyle(
+                color: Colors.grey[400], 
+                fontSize: 11,
+              ),
+              textAlign: TextAlign.right,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }

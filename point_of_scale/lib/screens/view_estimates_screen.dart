@@ -496,7 +496,7 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            'Sale by: ${estimate['sale_by'] ?? 'Unknown'}',
+                                            'Made by: ${estimate['sale_by'] ?? 'Unknown'}',
                                             style: TextStyle(
                                               color: Colors.grey[500],
                                               fontSize: 12,
@@ -588,7 +588,7 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
                 _buildDetailRow('Customer', estimate['customer_name'] ?? ''),
                 _buildDetailRow('Phone', estimate['customer_phone'] ?? ''),
                 _buildDetailRow('Address', estimate['customer_address'] ?? ''),
-                _buildDetailRow('Sale By', estimate['sale_by'] ?? ''),
+                _buildDetailRow('Made By', estimate['sale_by'] ?? ''),
                 _buildDetailRow(
                   'Date',
                   (() {
