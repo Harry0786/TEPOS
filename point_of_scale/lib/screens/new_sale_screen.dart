@@ -48,7 +48,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   // Payment mode variable
   String _selectedPaymentMode = 'Cash';
 
-  // Sale by variable
+  // Made by variable
   String _selectedSaleBy = 'Rajesh Goyal'; // Default selection
   final List<String> _saleByOptions = [
     'Rajesh Goyal',
@@ -667,12 +667,12 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                     _buildInputField('Address', _customerAddressController),
                     const SizedBox(height: 12),
 
-                    // Sale By dropdown
+                    // Made By dropdown
                     DropdownButtonFormField<String>(
                       value: _selectedSaleBy,
                       dropdownColor: const Color(0xFF1A1A1A),
                       decoration: InputDecoration(
-                        labelText: 'Sale By',
+                        labelText: 'Made By',
                         labelStyle: TextStyle(color: Colors.grey[400]),
                         enabledBorder: OutlineInputBorder(
                           borderSide: const BorderSide(
@@ -790,7 +790,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Sale By positioned on the right
+                    // Made By positioned on the right
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -802,7 +802,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                             border: Border.all(color: const Color(0xFF6B8E7F)),
                           ),
                           child: Text(
-                            'Sale By: $_selectedSaleBy',
+                            'Made By: $_selectedSaleBy',
                             style: const TextStyle(
                               color: Color(0xFF6B8E7F),
                               fontSize: 11,
