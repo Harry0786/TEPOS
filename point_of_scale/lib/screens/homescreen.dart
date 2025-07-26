@@ -4,15 +4,8 @@ import 'new_sale_screen.dart';
 import 'view_estimates_screen.dart';
 import '../services/api_service.dart';
 import '../services/websocket_service.dart';
-import '../services/performance_service.dart';
-import '../services/pdf_service.dart';
+import '../utils/performance_service.dart';
 import 'view_orders_screen.dart';
-import 'reports_screen.dart';
-import 'settings_screen.dart';
-import 'package:printing/printing.dart';
-import 'package:pdf/pdf.dart';
-import 'package:flutter/services.dart';
-import 'inventory_screen.dart';
 import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -31,25 +24,30 @@ class _HomeScreenState extends State<HomeScreen>
   late WebSocketService _webSocketService;
   DateTime? _lastRefreshTime;
 
+  // Constants for memory management
+  static const int _maxListSize = 1000;
+  static const int _maxCacheSize = 50;
+
   // Performance monitoring
   final PerformanceService _performanceService = PerformanceService();
 
   // Auto refresh timers - optimized
   Timer? _periodicRefreshTimer;
   Timer? _connectionCheckTimer;
-  DateTime? _lastAppResumeTime;
+  
+  // Debouncing for refresh operations
+  DateTime? _lastRefreshAttempt;
+  static const Duration _refreshDebounceTime = Duration(seconds: 2);
 
-  // Computed values cache with lazy initialization
-  double? _cachedTotalSales;
-  int? _cachedTotalOrders;
-  int? _cachedTotalEstimates;
-  int? _cachedCompletedSales;
+  // Computed values cache with lazy initialization  
   List<Map<String, dynamic>>? _cachedRecentOrders;
-  Map<String, dynamic>? _cachedOrderStats;
 
   // Widget cache with keys for better control
   final Map<String, Widget> _widgetCache = {};
   bool _cacheInvalidated = false;
+
+  // Date parsing cache to avoid repeated expensive operations
+  final Map<String, DateTime> _dateCache = {};
 
   @override
   bool get wantKeepAlive => true;
@@ -58,15 +56,22 @@ class _HomeScreenState extends State<HomeScreen>
   void dispose() {
     print('🔄 Disposing HomeScreen...');
 
-    // Cancel timers safely
+    // Cancel timers safely with additional protection
     try {
       _periodicRefreshTimer?.cancel();
-      _connectionCheckTimer?.cancel();
+      _periodicRefreshTimer = null;
     } catch (e) {
-      print('⚠️ Error canceling timers: $e');
+      print('⚠️ Error canceling periodic refresh timer: $e');
     }
 
-    // Dispose services safely
+    try {
+      _connectionCheckTimer?.cancel();
+      _connectionCheckTimer = null;
+    } catch (e) {
+      print('⚠️ Error canceling connection check timer: $e');
+    }
+
+    // Dispose services safely with enhanced error handling
     try {
       _webSocketService.dispose();
     } catch (e) {
@@ -86,9 +91,19 @@ class _HomeScreenState extends State<HomeScreen>
       print('⚠️ Error removing app lifecycle observer: $e');
     }
 
-    // Clear caches
-    _widgetCache.clear();
-    _cacheInvalidated = true;
+    // Clear all caches and lists to prevent memory leaks with null checks
+    try {
+      _widgetCache.clear();
+      _dateCache.clear();
+      _orders.clear();
+      _estimates.clear();
+      _cachedRecentOrders = null;
+      _cacheInvalidated = true;
+      _lastRefreshTime = null;
+      _lastRefreshAttempt = null;
+    } catch (e) {
+      print('⚠️ Error clearing caches: $e');
+    }
 
     super.dispose();
     print('✅ HomeScreen disposed successfully');
@@ -137,33 +152,25 @@ class _HomeScreenState extends State<HomeScreen>
   void _initializeWebSocket() {
     try {
       _webSocketService = WebSocketService(serverUrl: ApiService.webSocketUrl);
-      _webSocketService.connect();
       
-      // Add a periodic connection status check - reduced frequency to save resources
-      _connectionCheckTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-        if (mounted) {
-          // Only force UI update when connection status changes
-          bool currentStatus = _webSocketService.isConnected;
-          _webSocketService.checkConnectionStatus();
-          
-          if (currentStatus != _webSocketService.isConnected) {
-            setState(() {
-              // This will trigger a rebuild only when status changes
-              print('🔌 Connection status changed: ${_webSocketService.isConnected ? 'Connected' : 'Disconnected'}');
-            });
-          }
-        }
-      });
+      // Connect with enhanced error handling
+      _webSocketService.connect();
 
       // Handle structured WebSocket messages for efficient updates
       _webSocketService.messageStream.listen(
         (message) {
           if (mounted) {
-            _handleWebSocketMessage(message);
+            try {
+              _handleWebSocketMessage(message);
+            } catch (e) {
+              print('❌ Error handling WebSocket message: $e');
+              // Don't crash the app, continue operation
+            }
           }
         },
         onError: (error) {
           print('❌ WebSocket message stream error: $error');
+          // Enhanced error recovery - don't let stream errors crash the app
         },
       );
 
@@ -180,17 +187,34 @@ class _HomeScreenState extends State<HomeScreen>
               print(
                 '🔄 Legacy WebSocket message received: $message - refreshing data...',
               );
-              _loadData();
+              // Add a small delay to prevent rapid successive calls
+              Future.delayed(const Duration(milliseconds: 500), () {
+                if (mounted && !_isRefreshing) {
+                  _loadData();
+                }
+              });
             }
           }
         },
         onError: (error) {
           print('❌ WebSocket legacy message stream error: $error');
+          // Enhanced error recovery
         },
       );
     } catch (e) {
       print('❌ Error initializing WebSocket: $e');
       // Continue without WebSocket - app will still work
+      // Set up a retry mechanism for failed WebSocket initialization
+      Timer(const Duration(seconds: 15), () {
+        if (mounted) {
+          print('🔄 Retrying WebSocket initialization after error...');
+          try {
+            _initializeWebSocket();
+          } catch (retryError) {
+            print('❌ WebSocket retry also failed: $retryError');
+          }
+        }
+      });
     }
   }
 
@@ -268,6 +292,10 @@ class _HomeScreenState extends State<HomeScreen>
 
       setState(() {
         _estimates.insert(0, newEstimate);
+        // Limit list size to prevent memory issues
+        if (_estimates.length > _maxListSize) {
+          _estimates.removeLast();
+        }
         _invalidateCache(); // Invalidate cache to force recalculation
       });
 
@@ -337,6 +365,10 @@ class _HomeScreenState extends State<HomeScreen>
 
       setState(() {
         _orders.insert(0, newOrder);
+        // Limit list size to prevent memory issues
+        if (_orders.length > _maxListSize) {
+          _orders.removeLast();
+        }
         _invalidateCache(); // Invalidate cache to force recalculation
       });
 
@@ -384,23 +416,34 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     try {
-      // Use the new force refresh method for better reliability
+      // Use the new force refresh method with enhanced error handling
       final refreshResult = await ApiService.forceRefreshAllData().timeout(
-        const Duration(seconds: 20),
+        const Duration(seconds: 30), // Increased timeout for better reliability
         onTimeout: () {
-          throw Exception('Data refresh timeout - please try again');
+          throw Exception('Data refresh timeout - server may be slow, please try again');
         },
       );
 
       if (refreshResult['success'] == true) {
         if (mounted) {
           setState(() {
-            _orders = List<Map<String, dynamic>>.from(
+            final newOrders = List<Map<String, dynamic>>.from(
               refreshResult['orders'] ?? [],
             );
-            _estimates = List<Map<String, dynamic>>.from(
+            final newEstimates = List<Map<String, dynamic>>.from(
               refreshResult['estimates'] ?? [],
             );
+            
+            // Debug: Print loaded data counts
+            print('🔍 Debug _loadData - Raw orders: ${newOrders.length}, Raw estimates: ${newEstimates.length}');
+            
+            // Limit list sizes to prevent memory issues
+            _orders = newOrders.take(_maxListSize).toList();
+            _estimates = newEstimates.take(_maxListSize).toList();
+            
+            // Debug: Print final counts after limiting
+            print('🔍 Debug _loadData - Final orders: ${_orders.length}, Final estimates: ${_estimates.length}');
+            
             _isLoading = false;
             _isRefreshing = false;
             _lastRefreshTime = DateTime.now();
@@ -418,12 +461,59 @@ class _HomeScreenState extends State<HomeScreen>
           _isLoading = false;
           _isRefreshing = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load data: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        
+        // Enhanced error message for network issues with specific handling
+        String errorMessage = 'Failed to load data';
+        bool isNetworkIssue = false;
+        
+        if (e.toString().contains('Connection reset') || 
+            e.toString().contains('SocketException') ||
+            e.toString().contains('Connection refused') ||
+            e.toString().contains('Network is unreachable')) {
+          errorMessage = 'Network connection issue - please check your internet and try again';
+          isNetworkIssue = true;
+        } else if (e.toString().contains('timeout') || 
+                   e.toString().contains('TimeoutException')) {
+          errorMessage = 'Server is slow - please try again in a moment';
+        } else if (e.toString().contains('FormatException') ||
+                   e.toString().contains('Invalid JSON')) {
+          errorMessage = 'Server response error - please try again';
+        } else {
+          errorMessage = 'Failed to load data: ${e.toString().length > 100 ? e.toString().substring(0, 100) + '...' : e.toString()}';
+        }
+        
+        // Only show error message if this isn't a background refresh
+        if (!_isRefreshing || isNetworkIssue) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(
+                    isNetworkIssue ? Icons.wifi_off : Icons.error_outline, 
+                    color: Colors.white, 
+                    size: 20
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(errorMessage)),
+                ],
+              ),
+              backgroundColor: isNetworkIssue ? Colors.orange : Colors.red,
+              duration: Duration(seconds: isNetworkIssue ? 3 : 4),
+              action: SnackBarAction(
+                label: 'Retry',
+                textColor: Colors.white,
+                onPressed: () {
+                  // Retry after a short delay with exponential backoff concept
+                  Future.delayed(const Duration(milliseconds: 1000), () {
+                    if (mounted) {
+                      _loadData();
+                    }
+                  });
+                },
+              ),
+            ),
+          );
+        }
       }
     }
 
@@ -431,14 +521,17 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _invalidateCache() {
-    _cachedTotalSales = null;
-    _cachedTotalOrders = null;
-    _cachedTotalEstimates = null;
-    _cachedCompletedSales = null;
-    _cachedRecentOrders = null;
-    _cachedOrderStats = null;
-    _widgetCache.clear();
-    _cacheInvalidated = true;
+    // Only invalidate if not already invalidated to reduce unnecessary work
+    if (!_cacheInvalidated) {
+      _cachedRecentOrders = null;
+      _cacheInvalidated = true;
+      
+      // Manage widget cache size to prevent memory issues
+      if (_widgetCache.length > _maxCacheSize) {
+        _widgetCache.clear();
+        print('🧹 Widget cache cleared due to size limit (${_maxCacheSize})');
+      }
+    }
   }
 
   // Helper to check if a date is today
@@ -496,7 +589,6 @@ class _HomeScreenState extends State<HomeScreen>
   double get _totalSales => _orderStats['totalSales'];
   int get _totalOrders => _orderStats['totalOrders'];
   int get _totalEstimates => _orderStats['totalEstimates'];
-  int get _completedSales => _orderStats['completedSales'];
 
   List<Map<String, dynamic>> get _recentOrders {
     if (_cachedRecentOrders != null && !_cacheInvalidated) {
@@ -506,44 +598,70 @@ class _HomeScreenState extends State<HomeScreen>
     _performanceService.startOperation('HomeScreen.computeRecentOrders');
 
     try {
-      // Combine orders and estimates for recent display
+      // Debug: Print the raw data available
+      print('🔍 Debug Recent Orders - Orders count: ${_orders.length}, Estimates count: ${_estimates.length}');
+      
+      // Create empty list to hold all items
       final allItems = <Map<String, dynamic>>[];
 
       // Add orders with type indicator
       for (final order in _orders) {
-        allItems.add({
-          ...order,
-          'type': 'order',
-          'display_id':
-              order['sale_number'] ?? order['order_id'] ?? order['id'],
-        });
+        try {
+          allItems.add({
+            ...order,
+            'type': 'order',
+            'display_id': order['sale_number'] ?? order['order_id'] ?? order['id'],
+          });
+        } catch (e) {
+          print('⚠️ Error processing order: $e, Order: $order');
+        }
       }
 
       // Add estimates with type indicator
       for (final estimate in _estimates) {
-        allItems.add({
-          ...estimate,
-          'type': 'estimate',
-          'display_id': estimate['estimate_number'] ?? estimate['id'],
+        try {
+          allItems.add({
+            ...estimate,
+            'type': 'estimate',
+            'display_id': estimate['estimate_number'] ?? estimate['id'],
+          });
+        } catch (e) {
+          print('⚠️ Error processing estimate: $e, Estimate: $estimate');
+        }
+      }
+
+      // Debug: Print combined data
+      print('🔍 Debug Recent Orders - Combined items count: ${allItems.length}');
+      if (allItems.isNotEmpty) {
+        print('🔍 Debug Recent Orders - First item: ${allItems.first['display_id']} (${allItems.first['type']})');
+      }
+
+      // Sort by created_at date (newest first)
+      if (allItems.length > 1) {
+        allItems.sort((a, b) {
+          try {
+            final aDate = _parseDate(a['created_at']);
+            final bDate = _parseDate(b['created_at']);
+            return bDate.compareTo(aDate);
+          } catch (e) {
+            print('⚠️ Error sorting recent orders: $e');
+            return 0;
+          }
         });
       }
 
-      // Sort by creation date
-      allItems.sort((a, b) {
-        try {
-          final aDate = _parseDate(a['created_at']);
-          final bDate = _parseDate(b['created_at']);
-          return bDate.compareTo(aDate);
-        } catch (e) {
-          print('❌ Error sorting items: $e');
-          return 0;
-        }
-      });
-
+      // Take only the first 5 items for recent orders
       _cachedRecentOrders = allItems.take(5).toList();
+      
+      // Debug: Print final result
+      print('🔍 Debug Recent Orders - Final cached count: ${_cachedRecentOrders?.length ?? 0}');
+      
+      // Mark cache as valid
+      _cacheInvalidated = false;
     } catch (e) {
       print('❌ Error computing recent orders: $e');
       _cachedRecentOrders = [];
+      _cacheInvalidated = false;
     }
 
     _performanceService.endOperation('HomeScreen.computeRecentOrders');
@@ -555,192 +673,58 @@ class _HomeScreenState extends State<HomeScreen>
     if (dateValue == null) return DateTime(1970); // clearly invalid
     if (dateValue is DateTime)
       return dateValue.toUtc().add(const Duration(hours: 5, minutes: 30));
+    
+    final key = dateValue.toString();
+    
+    // Check cache first
+    if (_dateCache.containsKey(key)) {
+      return _dateCache[key]!;
+    }
+    
     try {
       // Try parsing ISO8601 and convert to IST
-      return DateTime.tryParse(
-            dateValue.toString(),
-          )?.toUtc().add(const Duration(hours: 5, minutes: 30)) ??
-          DateTime(1970);
+      final parsed = DateTime.tryParse(key)?.toUtc().add(const Duration(hours: 5, minutes: 30)) ?? DateTime(1970);
+      
+      // Cache the result (limit cache size for memory efficiency)
+      if (_dateCache.length >= 100) {
+        // Remove oldest entries to prevent memory bloat
+        final keysToRemove = _dateCache.keys.take(20).toList();
+        for (final keyToRemove in keysToRemove) {
+          _dateCache.remove(keyToRemove);
+        }
+      }
+      _dateCache[key] = parsed;
+      
+      return parsed;
     } catch (_) {
-      return DateTime(1970);
+      final fallback = DateTime(1970);
+      _dateCache[key] = fallback;
+      return fallback;
     }
-  }
-
-  void _showConnectionStatus() {
-    // Force connection check before showing dialog
-    _webSocketService.checkConnectionStatus();
-    
-    final lastRefreshText = _lastRefreshTime != null
-        ? _formatTime(_lastRefreshTime!)
-        : 'Never';
-    
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          child: Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: const Color(0xFF1A1A1A),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Row(
-                  children: [
-                    Icon(
-                      _webSocketService.isConnected ? Icons.check_circle : Icons.error,
-                      color: _webSocketService.isConnected
-                          ? const Color(0xFF00E676)
-                          : const Color(0xFFFF3D00),
-                      size: 24,
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Connection Status',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                // Status box - completely rebuilt
-                Container(
-                  width: double.infinity,
-                  margin: EdgeInsets.zero,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0D0D0D),
-                    borderRadius: BorderRadius.circular(12),
-                    // Border removed
-                  ),
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            _webSocketService.isConnected ? Icons.wifi : Icons.wifi_off,
-                            color: _webSocketService.isConnected
-                                ? const Color(0xFF00E676)
-                                : const Color(0xFFFF3D00),
-                            size: 24,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _webSocketService.isConnected
-                                      ? 'Connected to Server'
-                                      : 'Disconnected from Server',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _webSocketService.isConnected
-                                      ? 'Your POS system is online and working properly.'
-                                      : 'Your POS system is offline. Press "Reconnect" to try again.',
-                                  style: TextStyle(
-                                    color: _webSocketService.isConnected
-                                        ? const Color(0xFFA5D6A7)
-                                        : const Color(0xFFFFB74D),
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Last updated info
-                Row(
-                  children: [
-                    const Icon(Icons.update, color: Color(0xFF9E9E9E), size: 16),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Last updated: $lastRefreshText',
-                      style: const TextStyle(color: Color(0xFF9E9E9E), fontSize: 12),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                // Actions row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Close', style: TextStyle(color: Colors.grey)),
-                    ),
-                    const SizedBox(width: 8),
-                    if (!_webSocketService.isConnected)
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF6B8E7F),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          // Force reconnection and check connection status
-                          _webSocketService.connect();
-                          // Wait a moment for connection to establish
-                          Future.delayed(const Duration(milliseconds: 500), () {
-                            if (mounted) {
-                              _webSocketService.checkConnectionStatus();
-                              setState(() {});
-                              _loadData();
-                            }
-                          });
-                        },
-                        child: const Text('Reconnect'),
-                      ),
-                    if (_webSocketService.isConnected)
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF6B8E7F),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          _loadData();
-                        },
-                        child: const Text('Refresh Data'),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
 
-    _performanceService.startOperation('HomeScreen.build');
+    // Skip performance tracking during rapid rebuilds to prevent overhead
+    final shouldTrackPerformance = !_isRefreshing && !_isLoading;
+    if (shouldTrackPerformance) {
+      _performanceService.startOperation('HomeScreen.build');
+    }
+
+    // Add safety check for context validity
+    if (!mounted) {
+      return const SizedBox.shrink();
+    }
+
+    // Debug: Check recent orders computation
+    try {
+      final recentOrdersCount = _recentOrders.length;
+      print('🔍 Debug Build - Recent orders available: $recentOrdersCount');
+    } catch (e) {
+      print('❌ Error in build getting recent orders: $e');
+    }
 
     final widget = Scaffold(
       appBar: AppBar(
@@ -768,16 +752,16 @@ class _HomeScreenState extends State<HomeScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Header
+                        // Header - always rebuild for connection status
                         _buildHeader(),
                         const SizedBox(height: 16),
-                        // Today's Report
+                        // Today's Report - use cached version when possible
                         _buildTodayReport(),
                         const SizedBox(height: 24),
-                        // Quick Actions
+                        // Quick Actions - highly cacheable
                         _buildQuickActions(),
                         const SizedBox(height: 20),
-                        // Recent Orders and Estimates
+                        // Recent Orders - use optimized computation
                         _buildRecentOrders(),
                         const SizedBox(height: 20), // Bottom padding
                       ],
@@ -787,16 +771,18 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
 
-    _performanceService.endOperation('HomeScreen.build');
+    if (shouldTrackPerformance) {
+      try {
+        _performanceService.endOperation('HomeScreen.build');
+      } catch (e) {
+        print('⚠️ Error ending performance tracking: $e');
+      }
+    }
+    
     return widget;
   }
 
   Widget _buildHeader() {
-    // Don't use caching for connection-dependent UI elements
-    // Force rebuild every time this method is called
-    
-    // Only log when the status has changed (controlled in setState elsewhere)
-    
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       decoration: BoxDecoration(
@@ -805,60 +791,35 @@ class _HomeScreenState extends State<HomeScreen>
       ),
       child: Row(
         children: [
-          // Logo with optimized image loading and curved edges - now fully tappable
-          GestureDetector(
-            onTap: () {
-              // Check connection status before showing dialog
-              _webSocketService.checkConnectionStatus();
-              setState(() {
-                // Update UI with current status
-              });
-              _showConnectionStatus();
-            },
+          // Logo with optimized image loading and curved edges
+          Padding(
+            padding: const EdgeInsets.all(4.0),
             child: Padding(
-              padding: const EdgeInsets.all(4.0), // Extra padding for easier tapping
-              child: Stack(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14), // Rounded corners for the logo
-                      child: Image.asset(
-                        'assets/icon/TEPOS Logo.png',
-                        height: 42,
-                        width: 42,
-                        cacheWidth: 80,
-                        filterQuality: FilterQuality.medium,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 4,
-                    child: Container(
-                      width: 18, // Slightly larger for better touch target
-                      height: 18,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14), // Rounded corners for the logo
+                child: Image.asset(
+                  'assets/icon/TEPOS Logo.png',
+                  height: 42,
+                  width: 42,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    // Fallback if image fails to load
+                    return Container(
+                      height: 42,
+                      width: 42,
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.transparent,
+                        color: const Color(0xFF6B8E7F),
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                      child: Center(
-                        child: Container(
-                          width: 14,
-                          height: 14,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            // Use a more vibrant color to make status more visible
-                            color: _webSocketService.isConnected
-                                ? const Color(0xFF00E676) // Brighter green when connected
-                                : const Color(0xFFFF3D00), // Brighter red when disconnected
-                            border: Border.all(color: const Color(0xFF1A1A1A), width: 2),
-                          ),
-                        ),
+                      child: const Icon(
+                        Icons.store,
+                        color: Colors.white,
+                        size: 24,
                       ),
-                    ),
-                  ),
-                ],
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -876,11 +837,11 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
                 Text(
-                  _webSocketService.isConnected ? 'Online' : 'Offline - Tap logo to reconnect',
+                  'Point of Sale System',
                   style: TextStyle(
-                    color: _webSocketService.isConnected ? const Color(0xFF4CAF50) : const Color(0xFFFF9800),
+                    color: Colors.grey[400],
                     fontSize: 11,
-                    fontWeight: _webSocketService.isConnected ? FontWeight.normal : FontWeight.bold,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
               ],
@@ -1150,336 +1111,6 @@ class _HomeScreenState extends State<HomeScreen>
     return breakdown;
   }
 
-  String _getPaymentModeDisplayName(String mode) {
-    return mode;
-  }
-
-  Color _getPaymentModeColor(String mode) {
-    // Optionally, assign colors based on known modes, fallback to a default
-    if (mode.toLowerCase().contains('cash')) return const Color(0xFF4CAF50);
-    if (mode.toLowerCase().contains('upi')) return const Color(0xFF673AB7);
-    if (mode.toLowerCase().contains('card')) return const Color(0xFF2196F3);
-    if (mode.toLowerCase().contains('online')) return const Color(0xFF9C27B0);
-    if (mode.toLowerCase().contains('bank')) return const Color(0xFFFF9800);
-    if (mode.toLowerCase().contains('cheque')) return const Color(0xFF607D8B);
-    return const Color(0xFF757575);
-  }
-
-  void _showPaymentBreakdownDialog() {
-    final paymentBreakdown = _getPaymentBreakdownToday();
-    // Calculate total from payment breakdown to ensure accuracy
-    final totalAmount = paymentBreakdown.values.fold<double>(
-      0.0,
-      (sum, data) => sum + (data['amount'] as double),
-    );
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1A1A1A),
-          title: Row(
-            children: [
-              const Icon(Icons.payment, color: Color(0xFF4CAF50), size: 24),
-              const SizedBox(width: 8),
-              const Text(
-                'Payment Breakdown',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Total Sales row (improved)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.attach_money,
-                      color: Color(0xFF6B8E7F),
-                      size: 26,
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Total Sales',
-                          style: TextStyle(
-                            color: Color(0xFFB0B0B0),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Rs. ${totalAmount.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                const Divider(color: Color(0xFF232526), thickness: 1),
-                const SizedBox(height: 10),
-                if (paymentBreakdown.isNotEmpty)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      'Payment Modes',
-                      style: TextStyle(
-                        color: Color(0xFFB0B0B0),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                if (paymentBreakdown.isEmpty)
-                  const Center(
-                    child: Column(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.grey, size: 32),
-                        SizedBox(height: 8),
-                        Text(
-                          'No payment data available',
-                          style: TextStyle(color: Colors.grey, fontSize: 14),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children:
-                        paymentBreakdown.entries.map((entry) {
-                          final mode = entry.key;
-                          final data = entry.value;
-                          final count = data['count'] as int;
-                          final amount = data['amount'] as double;
-                          if (count == 0) return const SizedBox.shrink();
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 4,
-                                  height: 24,
-                                  decoration: BoxDecoration(
-                                    color: _getPaymentModeColor(mode),
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  _getPaymentModeDisplayName(mode),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  'Rs. ${amount.toStringAsFixed(0)}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text(
-                'Close',
-                style: TextStyle(color: Color(0xFF6B8E7F)),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // Update the onTap for Total Sales to use the new breakdown
-  void _showPaymentBreakdownDialogToday() {
-    final paymentBreakdown = _getPaymentBreakdownToday();
-    // Calculate total from payment breakdown to ensure accuracy
-    final totalAmount = paymentBreakdown.values.fold<double>(
-      0.0,
-      (sum, data) => sum + (data['amount'] as double),
-    );
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1A1A1A),
-          title: Row(
-            children: [
-              const Icon(Icons.payment, color: Color(0xFF4CAF50), size: 24),
-              const SizedBox(width: 8),
-              const Text(
-                'Payment Breakdown',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Total Sales row (improved)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.attach_money,
-                      color: Color(0xFF6B8E7F),
-                      size: 26,
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Total Sales',
-                          style: TextStyle(
-                            color: Color(0xFFB0B0B0),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Rs. ${totalAmount.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                const Divider(color: Color(0xFF232526), thickness: 1),
-                const SizedBox(height: 10),
-                if (paymentBreakdown.isNotEmpty)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      'Payment Modes',
-                      style: TextStyle(
-                        color: Color(0xFFB0B0B0),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                if (paymentBreakdown.isEmpty)
-                  const Center(
-                    child: Column(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.grey, size: 32),
-                        SizedBox(height: 8),
-                        Text(
-                          'No payment data available',
-                          style: TextStyle(color: Colors.grey, fontSize: 14),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children:
-                        paymentBreakdown.entries.map((entry) {
-                          final mode = entry.key;
-                          final data = entry.value;
-                          final count = data['count'] as int;
-                          final amount = data['amount'] as double;
-                          if (count == 0) return const SizedBox.shrink();
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 4,
-                                  height: 24,
-                                  decoration: BoxDecoration(
-                                    color: _getPaymentModeColor(mode),
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  _getPaymentModeDisplayName(mode),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  'Rs. ${amount.toStringAsFixed(0)}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text(
-                'Close',
-                style: TextStyle(color: Color(0xFF6B8E7F)),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   Widget _buildQuickActionCard(
     String title,
     IconData icon,
@@ -1600,12 +1231,7 @@ class _HomeScreenState extends State<HomeScreen>
                   Icons.analytics,
                   const Color(0xFF6B8E7F),
                   () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ReportsScreen(),
-                      ),
-                    );
+                    _showComingSoonDialog('Reports');
                   },
                 ),
                 _buildQuickActionCard(
@@ -1613,12 +1239,7 @@ class _HomeScreenState extends State<HomeScreen>
                   Icons.inventory,
                   const Color(0xFF6B8E7F),
                   () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const InventoryScreen(),
-                      ),
-                    );
+                    _showComingSoonDialog('Inventory');
                   },
                 ),
                 _buildQuickActionCard(
@@ -1626,12 +1247,7 @@ class _HomeScreenState extends State<HomeScreen>
                   Icons.settings,
                   const Color(0xFF6B8E7F),
                   () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SettingsScreen(),
-                      ),
-                    );
+                    _showComingSoonDialog('Settings');
                   },
                 ),
               ],
@@ -1697,8 +1313,14 @@ class _HomeScreenState extends State<HomeScreen>
                     : Column(
                       children:
                           _recentOrders
+                              .asMap()
+                              .entries
                               .take(5)
-                              .map((order) => _buildOrderItem(order))
+                              .map((entry) => _OrderItemWidget(
+                                key: ValueKey('order_${entry.value['id']}_${entry.key}'),
+                                item: entry.value,
+                                isLast: entry.key == _recentOrders.length - 1,
+                              ))
                               .toList(),
                     ),
           ),
@@ -1710,8 +1332,200 @@ class _HomeScreenState extends State<HomeScreen>
     return widget;
   }
 
-  Widget _buildOrderItem(Map<String, dynamic> item) {
-    final bool isLast = _recentOrders.indexOf(item) == _recentOrders.length - 1;
+  // ===== AUTO REFRESH FUNCTIONALITY =====
+
+  void _setupAutoRefresh() {
+    // Set up periodic refresh every 5 minutes (optimized for better performance)
+    _periodicRefreshTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
+      if (mounted && !_isRefreshing) {
+        print('🔄 Auto-refreshing data...');
+        _loadData();
+      }
+    });
+
+    // Set up pull-to-refresh gesture
+    _setupPullToRefresh();
+  }
+
+  void _setupPullToRefresh() {
+    // This will be handled by the RefreshIndicator widget in the build method
+  }
+
+  void _showComingSoonDialog(String featureName) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1A1A),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.construction,
+                  color: const Color(0xFF6B8E7F),
+                  size: 48,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '$featureName Coming Soon!',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'We\'re working hard to bring you this feature. Stay tuned for updates!',
+                  style: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6B8E7F),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text(
+                    'Got it!',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _onAppResumed() {
+    print('📱 App resumed - checking for updates...');
+
+    // Check if it's been more than 3 minutes since last refresh (optimized)
+    if (_lastRefreshTime == null ||
+        DateTime.now().difference(_lastRefreshTime!).inMinutes >= 3) {
+      _loadData();
+    }
+
+    // Reconnect WebSocket if needed
+    _webSocketService.connect();
+  }
+
+  void _onAppPaused() {
+    print('📱 App paused');
+    // Pause periodic refresh to save resources
+    _periodicRefreshTimer?.cancel();
+  }
+
+  void _onAppInactive() {
+    print('📱 App inactive');
+    // App is in background but not fully paused
+  }
+
+  void _onAppDetached() {
+    print('📱 App detached');
+    // App is being terminated
+  }
+
+  void _onAppHidden() {
+    print('📱 App hidden');
+    // App is hidden (e.g., by system UI)
+  }
+
+  Future<void> _forceRefresh() async {
+    print('🔄 Force refreshing data...');
+
+    // Prevent multiple simultaneous refreshes
+    if (_isRefreshing) {
+      print('⚠️ Refresh already in progress, skipping...');
+      return;
+    }
+
+    // Debounce rapid refresh attempts
+    final now = DateTime.now();
+    if (_lastRefreshAttempt != null && 
+        now.difference(_lastRefreshAttempt!) < _refreshDebounceTime) {
+      print('⚠️ Refresh debounced - too soon since last attempt');
+      return;
+    }
+    _lastRefreshAttempt = now;
+
+    try {
+      // Invalidate cache and load fresh data
+      _invalidateCache();
+
+      await _loadData();
+      
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Data refreshed successfully!'),
+            backgroundColor: const Color(0xFF6B8E7F),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ Error during force refresh: $e');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Refresh failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _forceRefresh(),
+            ),
+          ),
+        );
+      }
+    }
+  }
+}
+
+// Optimized stateless widget for order items
+class _OrderItemWidget extends StatelessWidget {
+  final Map<String, dynamic> item;
+  final bool isLast;
+
+  const _OrderItemWidget({
+    Key? key,
+    required this.item,
+    required this.isLast,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
     final String typeLabel = (item['type'] == 'order') ? 'Order' : 'Estimate';
     final Color typeColor =
         (item['type'] == 'order')
@@ -1831,361 +1645,5 @@ class _HomeScreenState extends State<HomeScreen>
         ),
       ),
     );
-  }
-
-  void _showOrderDetails(Map<String, dynamic> item) {
-    final bool isOrder = item['type'] == 'order';
-    final String itemNumber = item['display_id'] ?? 'Unknown';
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF1A1A1A),
-          title: Row(
-            children: [
-              Icon(
-                isOrder ? Icons.receipt : Icons.description,
-                color:
-                    isOrder ? const Color(0xFF4CAF50) : const Color(0xFFFF9800),
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '${isOrder ? 'Order' : 'Estimate'} $itemNumber',
-                  style: const TextStyle(color: Colors.white),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildDetailRow('Customer', item['customer_name'] ?? ''),
-                _buildDetailRow('Phone', item['customer_phone'] ?? ''),
-                _buildDetailRow('Address', item['customer_address'] ?? ''),
-                _buildDetailRow('Sale By', item['sale_by'] ?? ''),
-                _buildDetailRow(
-                  'Status',
-                  isOrder ? (item['status'] ?? '') : (item['status'] ?? ''),
-                ),
-                _buildDetailRow(
-                  'Date',
-                  item['created_at'].toString().split(' ')[0],
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Items:',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ...(item['items'] as List<dynamic>?)
-                        ?.map<Widget>(
-                          (item) => Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    '${item['name']} x${item['quantity']}',
-                                    style: TextStyle(color: Colors.grey[300]),
-                                  ),
-                                ),
-                                Text(
-                                  'Rs. ${(item['price'] * item['quantity']).toStringAsFixed(2)}',
-                                  style: TextStyle(color: Colors.grey[300]),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                        .toList() ??
-                    [],
-                const SizedBox(height: 12),
-                const Divider(color: Color(0xFF3A3A3A)),
-                const SizedBox(height: 8),
-                _buildDetailRow(
-                  'Subtotal',
-                  'Rs. ${(item['subtotal'] ?? 0.0).toStringAsFixed(2)}',
-                ),
-                if ((item['discount_amount'] ?? 0.0) > 0)
-                  _buildDetailRow(
-                    'Discount',
-                    (item['is_percentage_discount'] ?? false)
-                        ? '${item['discount_amount']}%'
-                        : 'Rs. ${item['discount_amount'].toStringAsFixed(2)}',
-                  ),
-                _buildDetailRow(
-                  'Total',
-                  'Rs. ${(item['total'] ?? item['amount'] ?? 0.0).toStringAsFixed(2)}',
-                  isTotal: true,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close', style: TextStyle(color: Colors.grey)),
-            ),
-            if (isOrder)
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6B8E7F),
-                ),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _printOrderPdf(item);
-                },
-                child: const Text('Print PDF'),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value, {bool isTotal = false}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            '$label:',
-            style: TextStyle(
-              color: Colors.grey[400],
-              fontSize: isTotal ? 16 : 14,
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                color: isTotal ? const Color(0xFF6B8E7F) : Colors.white,
-                fontSize: isTotal ? 16 : 14,
-                fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-              ),
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _printOrderPdf(Map<String, dynamic> order) async {
-    try {
-      // Show loading dialog
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext context) {
-          return const AlertDialog(
-            backgroundColor: Color(0xFF1A1A1A),
-            content: Row(
-              children: [
-                CircularProgressIndicator(color: Color(0xFF6B8E7F)),
-                SizedBox(width: 20),
-                Text(
-                  'Generating PDF...',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ],
-            ),
-          );
-        },
-      );
-
-      // Generate order PDF
-      final pdfFile = await PdfService.generateSalePdf(
-        saleNumber: order['sale_number'] ?? 'Unknown',
-        customerName: order['customer_name'] ?? '',
-        customerPhone: order['customer_phone'] ?? '',
-        customerAddress: order['customer_address'] ?? '',
-        saleBy: order['sale_by'] ?? '',
-        items: List<Map<String, dynamic>>.from(order['items'] ?? []),
-        subtotal: order['subtotal'] ?? 0.0,
-        discountAmount: order['discount_amount'] ?? 0.0,
-        isPercentageDiscount: order['is_percentage_discount'] ?? false,
-        total: order['total'] ?? order['amount'] ?? 0.0,
-        createdAt:
-            DateTime.tryParse(order['created_at'].toString()) ?? DateTime.now(),
-      );
-
-      // Close loading dialog
-      Navigator.of(context).pop();
-
-      // Print the PDF
-      await Printing.layoutPdf(
-        onLayout: (PdfPageFormat format) async => pdfFile.readAsBytesSync(),
-      );
-    } catch (e) {
-      // Close loading dialog
-      Navigator.of(context).pop();
-
-      // Show error dialog
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            backgroundColor: const Color(0xFF1A1A1A),
-            title: const Text(
-              'Print Error',
-              style: TextStyle(color: Colors.red),
-            ),
-            content: Text(
-              'Failed to print PDF: $e',
-              style: const TextStyle(color: Colors.white),
-            ),
-            actions: [
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6B8E7F),
-                ),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: const Text('OK'),
-              ),
-            ],
-          );
-        },
-      );
-    }
-  }
-
-  // ===== AUTO REFRESH FUNCTIONALITY =====
-
-  void _setupAutoRefresh() {
-    // Set up periodic refresh every 2 minutes (optimized)
-    _periodicRefreshTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
-      if (mounted && !_isRefreshing) {
-        print('🔄 Auto-refreshing data...');
-        _loadData();
-      }
-    });
-
-    // Set up pull-to-refresh gesture
-    _setupPullToRefresh();
-  }
-
-  void _setupPullToRefresh() {
-    // This will be handled by the RefreshIndicator widget in the build method
-  }
-
-  void _onAppResumed() {
-    print('📱 App resumed - checking for updates...');
-    _lastAppResumeTime = DateTime.now();
-
-    // Check if it's been more than 3 minutes since last refresh (optimized)
-    if (_lastRefreshTime == null ||
-        DateTime.now().difference(_lastRefreshTime!).inMinutes >= 3) {
-      _loadData();
-    }
-
-    // Reconnect WebSocket if needed
-    if (!_webSocketService.isConnected) {
-      _webSocketService.connect();
-    }
-  }
-
-  void _onAppPaused() {
-    print('📱 App paused');
-    // Pause periodic refresh to save resources
-    _periodicRefreshTimer?.cancel();
-  }
-
-  void _onAppInactive() {
-    print('📱 App inactive');
-    // App is in background but not fully paused
-  }
-
-  void _onAppDetached() {
-    print('📱 App detached');
-    // App is being terminated
-  }
-
-  void _onAppHidden() {
-    print('📱 App hidden');
-    // App is hidden (e.g., by system UI)
-  }
-
-  Future<void> _forceRefresh() async {
-    print('🔄 Force refreshing data...');
-
-    // Check connection status first
-    _webSocketService.checkConnectionStatus();
-    
-    // Force UI update to show current connection status
-    if (mounted) {
-      setState(() {
-        // This will update the connection dot color immediately
-      });
-    }
-
-    // Invalidate cache and load fresh data
-    _invalidateCache();
-
-    await _loadData();
-
-    // Check connection status again after data load
-    _webSocketService.checkConnectionStatus();
-    
-    // Final UI update to ensure connection status is current
-    if (mounted) {
-      setState(() {
-        // Final state update with current connection status
-      });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_webSocketService.isConnected 
-              ? 'Data refreshed successfully!' 
-              : 'Not connected, try again'),
-          backgroundColor: _webSocketService.isConnected 
-              ? const Color(0xFF6B8E7F) 
-              : Colors.red,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
-  }
-
-  void _checkForUpdates() async {
-    try {
-      // Check server health first with shorter timeout
-      final isHealthy = await ApiService.checkServerHealth().timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {
-          print('⚠️ Server health check timeout');
-          return false;
-        },
-      );
-
-      if (!isHealthy) {
-        print('⚠️ Server health check failed');
-        return;
-      }
-
-      // Check if there are any new orders/estimates
-      final currentOrders = await ApiService.fetchOrders();
-      if (currentOrders != null && currentOrders.length != _orders.length) {
-        print('🆕 New data detected - refreshing...');
-        _loadData();
-      }
-    } catch (e) {
-      print('❌ Error checking for updates: $e');
-    }
   }
 }
