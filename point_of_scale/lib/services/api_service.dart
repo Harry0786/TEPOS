@@ -3,14 +3,14 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   // ===== PRODUCTION CONFIGURATION =====
-  // Render production URLs only
-  static const String baseUrl = 'https://tepos.onrender.com/api';
-  static const String webSocketUrl = 'wss://tepos.onrender.com/ws';
+  // Railway production URLs
+  static const String baseUrl = 'https://tepos.railway.internal/api';
+  static const String webSocketUrl = 'wss://tepos.railway.internal/ws';
 
   // Helper method to print current configuration
   static void printConfiguration() {
     print('🌐 API Configuration:');
-    print('   Environment: PRODUCTION (Render)');
+    print('   Environment: PRODUCTION (Railway)');
     print('   API Base URL: $baseUrl');
     print('   WebSocket URL: $webSocketUrl');
   }

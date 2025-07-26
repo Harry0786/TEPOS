@@ -2,16 +2,16 @@ import os
 from typing import Dict, Any
 
 class Config:
-    """Production configuration for POS backend - Render only"""
+    """Production configuration for POS backend - Railway only"""
     
     # ===== PRODUCTION CONFIGURATION =====
-    # MongoDB settings (Render) - Use environment variable if available
+    # MongoDB settings (Railway) - Use environment variable if available
     MONGODB_URL = os.getenv("MONGODB_URL", "mongodb+srv://jayesh:jayesh@cluster0.xvxk1fu.mongodb.net/pos?retryWrites=true&w=majority")
     DATABASE_NAME = os.getenv("DATABASE_NAME", "pos")
     
     # CORS origins (Production)
     CORS_ORIGINS = [
-        "https://tepos.onrender.com"
+        "https://tepos.railway.internal"
     ]
     
     # Server configuration
@@ -53,7 +53,7 @@ class Config:
     def print_configuration(cls):
         """Print current configuration for debugging"""
         print("🔧 Backend Configuration:")
-        print("   Environment: PRODUCTION (Render)")
+        print("   Environment: PRODUCTION (Railway)")
         print(f"   MongoDB URL: {cls.get_mongodb_url()}")
         print(f"   Database Name: {cls.get_db_name()}")
         print(f"   CORS Origins: {cls.get_cors_origins()}")
@@ -61,5 +61,5 @@ class Config:
         print(f"   Server: {cls.HOST}:{cls.PORT}")
 
 # Environment-specific overrides
-if os.getenv("RENDER"):
-    print("🚀 Running in Render environment - production settings active") 
+if os.getenv("RAILWAY_ENVIRONMENT"):
+    print("🚀 Running in Railway environment - production settings active") 
