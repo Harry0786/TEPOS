@@ -21,8 +21,8 @@ class PdfService {
   }) async {
     final pdf = pw.Document();
     
-    // Items per page calculation (optimized for 12 items per page)
-    const int itemsPerPage = 12;
+    // Items per page calculation (optimized for 15 items per page)
+    const int itemsPerPage = 15;
     final int totalPages = (items.length / itemsPerPage).ceil();
     
     for (int pageIndex = 0; pageIndex < totalPages; pageIndex++) {
@@ -132,46 +132,57 @@ class PdfService {
     return pw.Container(
       width: double.infinity,
       padding: const pw.EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: pw.CrossAxisAlignment.end,
+      child: pw.Column(
         children: [
+          // Company name and address centered
           pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
               pw.Text(
                 'TIRUPATI ELECTRICALS',
                 style: pw.TextStyle(
                   fontSize: 18,
                   fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.green,
+                  color: PdfColors.black,
                 ),
               ),
               pw.Text(
                 'Daulatganj, Gwalior',
                 style: pw.TextStyle(
                   fontSize: 12,
-                  color: PdfColors.grey700,
+                  color: PdfColors.black,
                 ),
               ),
-              pw.SizedBox(height: 8),
-              pw.Text(
-                'Estimate No. $estimateNumber',
-                style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
-              ),
-              pw.Text(
-                'Date: ${DateFormat('dd/MM/yyyy').format(createdAt)}',
-                style: pw.TextStyle(fontSize: 11, color: PdfColors.grey600),
-              ),
+              pw.SizedBox(height: 16), // 2 line space after company address
             ],
           ),
-          pw.Text(
-            'Made By: $saleBy',
-            style: pw.TextStyle(
-              fontSize: 11,
-              fontWeight: pw.FontWeight.bold,
-              color: PdfColors.black,
-            ),
+          // Estimate details and Made By in row
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: pw.CrossAxisAlignment.end,
+            children: [
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Estimate No. $estimateNumber',
+                    style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.Text(
+                    'Date: ${DateFormat('dd/MM/yyyy').format(createdAt)}',
+                    style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: PdfColors.black),
+                  ),
+                ],
+              ),
+              pw.Text(
+                'Made By: $saleBy',
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.black,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -200,6 +211,7 @@ class PdfService {
             child: pw.Text(
               'Product',
               style: pw.TextStyle(fontSize: fontSize, fontWeight: pw.FontWeight.bold),
+              textAlign: pw.TextAlign.left,
             ),
           ),
           pw.SizedBox(width: spacing),
@@ -208,7 +220,7 @@ class PdfService {
             child: pw.Text(
               'Rate',
               style: pw.TextStyle(fontSize: fontSize, fontWeight: pw.FontWeight.bold),
-              textAlign: pw.TextAlign.center,
+              textAlign: pw.TextAlign.left,
             ),
           ),
           pw.SizedBox(width: spacing),
@@ -217,7 +229,7 @@ class PdfService {
             child: pw.Text(
               'Qty',
               style: pw.TextStyle(fontSize: fontSize, fontWeight: pw.FontWeight.bold),
-              textAlign: pw.TextAlign.center,
+              textAlign: pw.TextAlign.left,
             ),
           ),
           pw.SizedBox(width: spacing),
@@ -226,7 +238,7 @@ class PdfService {
             child: pw.Text(
               'Disc%',
               style: pw.TextStyle(fontSize: fontSize, fontWeight: pw.FontWeight.bold),
-              textAlign: pw.TextAlign.center,
+              textAlign: pw.TextAlign.left,
             ),
           ),
           pw.SizedBox(width: spacing),
@@ -235,7 +247,7 @@ class PdfService {
             child: pw.Text(
               'Amount',
               style: pw.TextStyle(fontSize: fontSize, fontWeight: pw.FontWeight.bold),
-              textAlign: pw.TextAlign.right,
+              textAlign: pw.TextAlign.left,
             ),
           ),
         ],
@@ -267,6 +279,7 @@ class PdfService {
               style: pw.TextStyle(fontSize: fontSize),
               maxLines: 1,
               overflow: pw.TextOverflow.clip,
+              textAlign: pw.TextAlign.left,
             ),
           ),
           pw.SizedBox(width: spacing),
@@ -275,7 +288,7 @@ class PdfService {
             child: pw.Text(
               'Rs.${item['price'].toStringAsFixed(0)}',
               style: pw.TextStyle(fontSize: fontSize),
-              textAlign: pw.TextAlign.center,
+              textAlign: pw.TextAlign.left,
             ),
           ),
           pw.SizedBox(width: spacing),
@@ -284,7 +297,7 @@ class PdfService {
             child: pw.Text(
               '${item['quantity']}',
               style: pw.TextStyle(fontSize: fontSize),
-              textAlign: pw.TextAlign.center,
+              textAlign: pw.TextAlign.left,
             ),
           ),
           pw.SizedBox(width: spacing),
@@ -292,8 +305,8 @@ class PdfService {
             width: large ? 50 : 30,
             child: pw.Text(
               '${(item['discount'] ?? 0).toStringAsFixed(0)}%',
-              style: pw.TextStyle(fontSize: fontSize, color: PdfColors.red),
-              textAlign: pw.TextAlign.center,
+              style: pw.TextStyle(fontSize: fontSize, color: PdfColors.black),
+              textAlign: pw.TextAlign.left,
             ),
           ),
           pw.SizedBox(width: spacing),
@@ -302,7 +315,7 @@ class PdfService {
             child: pw.Text(
               'Rs.${itemAmount.toStringAsFixed(0)}',
               style: pw.TextStyle(fontSize: fontSize, fontWeight: pw.FontWeight.bold),
-              textAlign: pw.TextAlign.right,
+              textAlign: pw.TextAlign.left,
             ),
           ),
         ],
@@ -766,18 +779,15 @@ class PdfService {
           style: pw.TextStyle(
             fontSize: isTotal ? fontSize + 2 : fontSize,
             fontWeight: isTotal ? pw.FontWeight.bold : pw.FontWeight.normal,
-            color: isDiscount ? PdfColors.red : PdfColors.black,
+            color: PdfColors.black,
           ),
         ),
         pw.Text(
           value,
           style: pw.TextStyle(
             fontSize: isTotal ? fontSize + 4 : fontSize,
-            fontWeight: pw.FontWeight.bold,
-            color:
-                isDiscount
-                    ? PdfColors.red
-                    : (isTotal ? PdfColors.green : PdfColors.black),
+            fontWeight: isDiscount ? pw.FontWeight.normal : pw.FontWeight.bold,
+            color: PdfColors.black,
           ),
         ),
       ],
