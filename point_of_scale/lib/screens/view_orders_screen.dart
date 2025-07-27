@@ -25,7 +25,12 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
     super.initState();
 
     try {
-      _webSocketService = WebSocketService(serverUrl: ApiService.webSocketUrl);
+      // Use singleton instance instead of creating new instances
+      _webSocketService = WebSocketService.instance;
+      
+      // Initialize with server URL
+      WebSocketService(serverUrl: ApiService.webSocketUrl);
+      
       _webSocketService.connect();
 
       // Handle structured WebSocket messages for efficient updates
@@ -432,11 +437,8 @@ class _ViewOrdersScreenState extends State<ViewOrdersScreen> {
 
   @override
   void dispose() {
-    try {
-      _webSocketService.dispose();
-    } catch (e) {
-      print('⚠️ Error disposing WebSocket service: $e');
-    }
+    // Don't dispose WebSocket singleton - let app lifecycle manage it
+    print('📱 WebSocket singleton preserved for app lifecycle management');
     super.dispose();
   }
 

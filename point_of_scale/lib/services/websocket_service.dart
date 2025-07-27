@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:web_socket_channel/status.dart' as status;
 
 // Structured WebSocket message types
 class WebSocketMessage {
@@ -52,32 +51,36 @@ class WebSocketMessage {
 }
 
 class WebSocketService {
-  static final WebSocketService _instance = WebSocketService._internal();
-  factory WebSocketService({required String serverUrl}) {
-    _instance._serverUrl = serverUrl;
-    return _instance;
+  static WebSocketService? _instance;
+  static WebSocketService get instance {
+    _instance ??= WebSocketService._internal();
+    return _instance!;
   }
+  
   WebSocketService._internal();
-
+  
+  // Factory constructor for backward compatibility
+  factory WebSocketService({required String serverUrl}) {
+    _serverUrl = serverUrl;
+    return instance;
+  }
+  
+  static String _serverUrl = '';
   WebSocketChannel? _channel;
   StreamController<WebSocketMessage>? _messageController;
   StreamController<String>? _legacyMessageController;
+  StreamController<bool>? _connectionStatusController;
   bool _isConnected = false;
+  bool _isConnecting = false;
   Timer? _reconnectTimer;
   Timer? _heartbeatTimer;
   Timer? _debounceTimer;
-  String _serverUrl = '';
 
   // Connection management
   int _reconnectAttempts = 0;
-  static const int _maxReconnectAttempts = 10; // Increased from 5
-  static const Duration _initialReconnectDelay = Duration(
-    seconds: 1,
-  ); // Reduced from 2
-  static const Duration _maxReconnectDelay = Duration(seconds: 30);
-  static const Duration _heartbeatInterval = Duration(
-    seconds: 30,
-  ); // Increased from 15 to reduce frequency
+  static const int _maxReconnectAttempts = 5; // Reduced for better stability
+  static const Duration _reconnectDelay = Duration(seconds: 3);
+  static const Duration _heartbeatInterval = Duration(seconds: 30);
 
   // Performance optimization
   static const Duration _debounceDelay = Duration(milliseconds: 300);
@@ -161,6 +164,21 @@ class WebSocketService {
     return _legacyMessageController!.stream;
   }
 
+  // Stream for connection status updates
+  Stream<bool> get connectionStream {
+    _connectionStatusController ??= StreamController<bool>.broadcast();
+    return _connectionStatusController!.stream;
+  }
+
+  // Helper method to update connection status and notify listeners
+  void _updateConnectionStatus(bool connected) {
+    if (_isConnected != connected) {
+      _isConnected = connected;
+      _connectionStatusController?.add(connected);
+      print('🔌 Connection status changed: ${connected ? "Connected" : "Disconnected"}');
+    }
+  }
+
   void connect() {
     // Throttle connection attempts by checking last attempt time
     final now = DateTime.now();
@@ -216,13 +234,13 @@ class WebSocketService {
       _startHeartbeat();
 
       // Force an initial health check
-      _isConnected = true;
+      _updateConnectionStatus(true);
       _isHealthy = true;
 
       print('✅ WebSocket connected successfully');
     } catch (e) {
       print('❌ Failed to connect to WebSocket: $e');
-      _isConnected = false;
+      _updateConnectionStatus(false);
       _isHealthy = false;
       _handleConnectionFailure();
     }
@@ -279,7 +297,7 @@ class WebSocketService {
   }
 
   void _handleConnectionFailure() {
-    _isConnected = false;
+    _updateConnectionStatus(false);
     _isHealthy = false;
     _consecutiveFailures++;
 
@@ -336,40 +354,19 @@ class WebSocketService {
 
   void _scheduleReconnect() {
     if (_reconnectTimer?.isActive ?? false) return;
-
-    // Exponential backoff with jitter
-    final delay = Duration(
-      milliseconds: (_initialReconnectDelay.inMilliseconds *
-              (1 << _reconnectAttempts))
-          .clamp(1, _maxReconnectDelay.inMilliseconds),
-    );
-
-    // Add jitter to prevent thundering herd
-    final jitter = Duration(milliseconds: (DateTime.now().millisecond % 500));
-    final totalDelay = delay + jitter;
-
-    // Only log first attempt and every third attempt to reduce spam
-    if (_reconnectAttempts == 0 || _reconnectAttempts % 3 == 0) {
-      print(
-        '🔄 Scheduling WebSocket reconnection in ${totalDelay.inSeconds} seconds... (attempt ${_reconnectAttempts + 1})',
-      );
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      print('❌ Max reconnection attempts reached');
+      return;
     }
 
-    _reconnectTimer = Timer(totalDelay, () {
-      if (!_isConnected) {
-        _reconnectAttempts++;
-        if (_reconnectAttempts <= _maxReconnectAttempts) {
-          // Only log first attempt and every third attempt
-          if (_reconnectAttempts == 1 || _reconnectAttempts % 3 == 0) {
-            print(
-              '🔄 Attempting to reconnect WebSocket... (attempt $_reconnectAttempts)',
-            );
-          }
-          connect();
-        } else {
-          print('⚠️ Max reconnection attempts reached, giving up');
-          _resetConnectionState();
-        }
+    _reconnectAttempts++;
+    final delay = _reconnectDelay * _reconnectAttempts;
+
+    print('🔄 Scheduling WebSocket reconnection in ${delay.inSeconds} seconds... (attempt $_reconnectAttempts)');
+
+    _reconnectTimer = Timer(delay, () {
+      if (!_isConnected && !_isConnecting) {
+        connect();
       }
     });
   }
@@ -400,6 +397,9 @@ class WebSocketService {
       if (_legacyMessageController?.isClosed == false) {
         _legacyMessageController?.close();
       }
+      if (_connectionStatusController?.isClosed == false) {
+        _connectionStatusController?.close();
+      }
     } catch (e) {
       print('⚠️ Error closing WebSocket controllers: $e');
     }
@@ -407,6 +407,7 @@ class WebSocketService {
     // Clear references
     _messageController = null;
     _legacyMessageController = null;
+    _connectionStatusController = null;
     _channel = null;
 
     print('✅ WebSocket service disposed successfully');

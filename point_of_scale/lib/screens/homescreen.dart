@@ -72,11 +72,8 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     // Dispose services safely with enhanced error handling
-    try {
-      _webSocketService.dispose();
-    } catch (e) {
-      print('⚠️ Error disposing WebSocket service: $e');
-    }
+    // Don't dispose WebSocket singleton - let app lifecycle manage it
+    print('📱 WebSocket singleton preserved for app lifecycle management');
 
     try {
       _performanceService.dispose();
@@ -151,7 +148,11 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _initializeWebSocket() {
     try {
-      _webSocketService = WebSocketService(serverUrl: ApiService.webSocketUrl);
+      // Use singleton instance instead of creating new instances
+      _webSocketService = WebSocketService.instance;
+      
+      // Initialize with server URL
+      WebSocketService(serverUrl: ApiService.webSocketUrl);
       
       // Connect with enhanced error handling
       _webSocketService.connect();
@@ -427,12 +428,38 @@ class _HomeScreenState extends State<HomeScreen>
       if (refreshResult['success'] == true) {
         if (mounted) {
           setState(() {
-            final newOrders = List<Map<String, dynamic>>.from(
-              refreshResult['orders'] ?? [],
-            );
-            final newEstimates = List<Map<String, dynamic>>.from(
-              refreshResult['estimates'] ?? [],
-            );
+            // Safely handle potentially null data with proper type checking
+            final ordersData = refreshResult['orders'];
+            final estimatesData = refreshResult['estimates'];
+            
+            List<Map<String, dynamic>> newOrders = [];
+            List<Map<String, dynamic>> newEstimates = [];
+            
+            // Safely process orders data
+            if (ordersData != null && ordersData is List) {
+              try {
+                newOrders = ordersData
+                    .where((item) => item != null && item is Map<String, dynamic>)
+                    .cast<Map<String, dynamic>>()
+                    .toList();
+              } catch (e) {
+                print('⚠️ Error processing orders data: $e');
+                newOrders = [];
+              }
+            }
+            
+            // Safely process estimates data
+            if (estimatesData != null && estimatesData is List) {
+              try {
+                newEstimates = estimatesData
+                    .where((item) => item != null && item is Map<String, dynamic>)
+                    .cast<Map<String, dynamic>>()
+                    .toList();
+              } catch (e) {
+                print('⚠️ Error processing estimates data: $e');
+                newEstimates = [];
+              }
+            }
             
             // Debug: Print loaded data counts
             print('🔍 Debug _loadData - Raw orders: ${newOrders.length}, Raw estimates: ${newEstimates.length}');
@@ -604,26 +631,26 @@ class _HomeScreenState extends State<HomeScreen>
       // Create empty list to hold all items
       final allItems = <Map<String, dynamic>>[];
 
-      // Add orders with type indicator
+      // Add orders with type indicator and safe access
       for (final order in _orders) {
         try {
           allItems.add({
             ...order,
             'type': 'order',
-            'display_id': order['sale_number'] ?? order['order_id'] ?? order['id'],
+            'display_id': order['sale_number'] ?? order['order_id'] ?? order['id'] ?? 'Unknown',
           });
         } catch (e) {
           print('⚠️ Error processing order: $e, Order: $order');
         }
       }
 
-      // Add estimates with type indicator
+      // Add estimates with type indicator and safe access
       for (final estimate in _estimates) {
         try {
           allItems.add({
             ...estimate,
             'type': 'estimate',
-            'display_id': estimate['estimate_number'] ?? estimate['id'],
+            'display_id': estimate['estimate_number'] ?? estimate['id'] ?? 'Unknown',
           });
         } catch (e) {
           print('⚠️ Error processing estimate: $e, Estimate: $estimate');

@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 // This is a placeholder file. The actual app_icon.png should be created manually.
 // Instructions:
 // 1. Open icon_generator.html in a web browser

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import '../services/sms_service.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:io';
 
 class TestSmsScreen extends StatefulWidget {
   const TestSmsScreen({super.key});
@@ -125,7 +123,12 @@ Tirupati Electricals
       '''.trim();
 
       // Use system share sheet
-      await Share.share(testMessage, subject: 'TEPOS Test Message');
+      await SharePlus.instance.share(
+        ShareParams(
+          text: testMessage,
+          subject: 'TEPOS Test Message',
+        ),
+      );
 
       setState(() {
         _isLoading = false;

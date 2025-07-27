@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'api_service.dart';
 
@@ -52,6 +51,7 @@ class AutoRefreshService extends ChangeNotifier {
   }
 
   /// Dispose the service
+  @override
   void dispose() {
     _periodicRefreshTimer?.cancel();
     _appResumeTimer?.cancel();
@@ -61,6 +61,7 @@ class AutoRefreshService extends ChangeNotifier {
     _activeRefreshRequests.clear();
     _isInitialized = false;
     print('🔄 AutoRefreshService disposed');
+    super.dispose();
   }
 
   /// Add a callback to be executed when data should be refreshed

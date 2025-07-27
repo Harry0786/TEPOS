@@ -28,7 +28,13 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
   @override
   void initState() {
     super.initState();
-    _webSocketService = WebSocketService(serverUrl: ApiService.webSocketUrl);
+    
+    // Use singleton instance instead of creating new instances
+    _webSocketService = WebSocketService.instance;
+    
+    // Initialize with server URL
+    WebSocketService(serverUrl: ApiService.webSocketUrl);
+    
     _webSocketService.connect();
 
     // Handle structured WebSocket messages for efficient updates
@@ -297,7 +303,8 @@ class _ViewEstimatesScreenState extends State<ViewEstimatesScreen> {
   @override
   void dispose() {
     _conversionTimeoutTimer?.cancel();
-    _webSocketService.dispose();
+    // Don't dispose WebSocket singleton - let app lifecycle manage it
+    print('📱 WebSocket singleton preserved for app lifecycle management');
     super.dispose();
   }
 

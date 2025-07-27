@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
 import '../services/api_service.dart';
 import '../services/pdf_service.dart';
 import '../services/performance_service.dart';
 import 'dart:io'; // Added for File
-import 'dart:convert'; // Added for json
-import 'package:http/http.dart' as http; // Added for http
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 

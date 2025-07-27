@@ -24,9 +24,10 @@ class ApiService {
     minutes: 1,
   ); // For frequently changing data
 
-  // Retry configuration
-  static const int _maxRetries = 2; // Reduced from 3
-  static const Duration _retryDelay = Duration(seconds: 3); // Increased from 2s
+  // Retry configuration - Enhanced for Render.com stability
+  static const int _maxRetries = 3; // Increased for better reliability
+  static const Duration _initialRetryDelay = Duration(seconds: 3);
+  static const Duration _maxRetryDelay = Duration(seconds: 15);
 
   // Request tracking to prevent duplicate calls
   static final Set<String> _activeRequests = {};
@@ -937,7 +938,7 @@ class ApiService {
     }
   }
 
-  // Retry logic for failed requests
+  // Retry logic for failed requests with exponential backoff
   static Future<T> _retryRequest<T>(Future<T> Function() request) async {
     int attempts = 0;
     while (attempts < _maxRetries) {
@@ -951,8 +952,17 @@ class ApiService {
           rethrow;
         }
 
-        // Wait before retrying with exponential backoff
-        await Future.delayed(_retryDelay * attempts);
+        // Calculate delay with exponential backoff and jitter
+        final baseDelay = _initialRetryDelay * (1 << (attempts - 1));
+        final cappedDelay = baseDelay > _maxRetryDelay ? _maxRetryDelay : baseDelay;
+        
+        // Add random jitter to prevent thundering herd (simple approach)
+        final jitterMs = (cappedDelay.inMilliseconds * 0.1).round();
+        final jitter = Duration(milliseconds: (jitterMs * 0.5 + jitterMs * 0.5 * (attempts % 3) / 3).round());
+        final finalDelay = cappedDelay + jitter;
+        
+        print('⏳ Retrying in ${finalDelay.inSeconds} seconds...');
+        await Future.delayed(finalDelay);
       }
     }
     throw Exception('Max retries exceeded');

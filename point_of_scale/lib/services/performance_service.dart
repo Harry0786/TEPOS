@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:collection';
-import 'package:flutter/material.dart';
 
 class PerformanceService {
   static final PerformanceService _instance = PerformanceService._internal();
